@@ -1,20 +1,22 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useSongStore } from '@/stores/useSongStore'
-import { PitchShifter } from 'soundtouchjs'
+import { pitchShiftBuffer } from '@/lib/pitch-shift'
 
 export function useLocalAudioPlayer() {
-  const audioBufferRef = useRef<AudioBuffer | null>(null)
+  const audioBufferRef = useRef<AudioBuffer | null>(null)  // original decoded buffer
+  const effectiveBufferRef = useRef<AudioBuffer | null>(null)  // buffer in use (may be pitch-shifted)
+  const pitchCacheRef = useRef<{ semitones: number; buffer: AudioBuffer } | null>(null)
+  const pitchProcessingRef = useRef(false)
+  const pitchAbortRef = useRef<AbortController | null>(null)
+
   const audioCtxRef = useRef<AudioContext | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
   const savedPositionRef = useRef(0)
   const rafIdRef = useRef(0)
   const loadingRef = useRef<Promise<void> | null>(null)
 
-  // PitchShifter path (pitch !== 0)
-  const shifterRef = useRef<PitchShifter | null>(null)
-
-  // Direct AudioBufferSourceNode path (pitch === 0) — bypasses SoundTouch entirely
+  // AudioBufferSourceNode playback state
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const startContextTimeRef = useRef(0)
   const startOffsetRef = useRef(0)
@@ -25,44 +27,23 @@ export function useLocalAudioPlayer() {
     cancelAnimationFrame(rafIdRef.current)
   }, [])
 
-  // Keep ref in sync so the RAF loop can call stopTimeUpdates without stale closures
   stopTimeUpdatesRef.current = stopTimeUpdates
 
   const startTimeUpdates = useCallback(() => {
     const update = () => {
-      const buffer = audioBufferRef.current
-      if (!buffer) return
+      const buffer = effectiveBufferRef.current
+      const ctx = audioCtxRef.current
+      if (!buffer || !ctx || !sourceNodeRef.current) return
 
-      if (sourceNodeRef.current) {
-        // Direct mode: compute position from AudioContext clock
-        const ctx = audioCtxRef.current
-        if (!ctx) return
-        const time = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
-        usePlaybackStore.getState().setCurrentTime(time)
-        if (time >= buffer.duration) {
-          stopTimeUpdatesRef.current()
-          try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
-          sourceNodeRef.current = null
-          savedPositionRef.current = 0
-          usePlaybackStore.getState().setStatus('ENDED')
-          return
-        }
-      } else if (shifterRef.current) {
-        // PitchShifter mode
-        const time = shifterRef.current.timePlayed
-        const perc = shifterRef.current.percentagePlayed
-        usePlaybackStore.getState().setCurrentTime(time)
+      const time = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
+      usePlaybackStore.getState().setCurrentTime(time)
 
-        // Detect end-of-track via source position instead of relying on
-        // PitchShifter's onEnd callback, which fires spuriously after
-        // seek/recreate due to empty SoundTouch internal buffers.
-        if (perc >= 99.9) {
-          stopTimeUpdatesRef.current()
-          savedPositionRef.current = 0
-          usePlaybackStore.getState().setStatus('ENDED')
-          return
-        }
-      } else {
+      if (time >= buffer.duration) {
+        stopTimeUpdatesRef.current()
+        try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
+        sourceNodeRef.current = null
+        savedPositionRef.current = 0
+        usePlaybackStore.getState().setStatus('ENDED')
         return
       }
       rafIdRef.current = requestAnimationFrame(update)
@@ -77,13 +58,6 @@ export function useLocalAudioPlayer() {
     return audioCtxRef.current
   }, [])
 
-  const destroyShifter = useCallback(() => {
-    if (shifterRef.current) {
-      shifterRef.current.disconnect()
-      shifterRef.current = null
-    }
-  }, [])
-
   const destroySourceNode = useCallback(() => {
     if (sourceNodeRef.current) {
       try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
@@ -92,41 +66,13 @@ export function useLocalAudioPlayer() {
     }
   }, [])
 
-  const createShifter = useCallback(() => {
-    const ctx = audioCtxRef.current
-    const buffer = audioBufferRef.current
-    if (!ctx || !buffer) return false
-
-    destroyShifter()
-
-    // Ensure gain node exists
-    if (!gainNodeRef.current) {
-      gainNodeRef.current = ctx.createGain()
-      gainNodeRef.current.connect(ctx.destination)
-    }
-    const { volume, muted } = usePlaybackStore.getState()
-    gainNodeRef.current.gain.value = muted ? 0 : volume / 100
-
-    const pitch = useSongStore.getState().pitch
-
-    // Pass no-op for onEnd — SoundTouch fires it spuriously after seek/recreate
-    // (empty internal buffers → extract returns 0 frames). End-of-track is
-    // detected reliably in the RAF time-update loop via percentagePlayed instead.
-    const shifter = new PitchShifter(ctx, buffer, 4096, () => {})
-    shifter.pitchSemitones = pitch
-    shifter.connect(gainNodeRef.current)
-    shifterRef.current = shifter
-    return true
-  }, [destroyShifter])
-
   const createSourceNode = useCallback((offset: number) => {
     const ctx = audioCtxRef.current
-    const buffer = audioBufferRef.current
+    const buffer = effectiveBufferRef.current
     if (!ctx || !buffer) return false
 
     destroySourceNode()
 
-    // Ensure gain node exists
     if (!gainNodeRef.current) {
       gainNodeRef.current = ctx.createGain()
       gainNodeRef.current.connect(ctx.destination)
@@ -161,7 +107,8 @@ export function useLocalAudioPlayer() {
     return unsub
   }, [])
 
-  // Sync pitch changes — switch playback mode between direct and PitchShifter
+  // When pitch changes: cancel ongoing processing, invalidate effective buffer,
+  // stop playback (user must click play again to trigger re-processing).
   useEffect(() => {
     let prevPitch = useSongStore.getState().pitch
 
@@ -169,49 +116,38 @@ export function useLocalAudioPlayer() {
       if (state.pitch === prevPitch) return
       prevPitch = state.pitch
 
-      const status = usePlaybackStore.getState().status
-      const isPlaying = status === 'PLAYING'
-      const isPaused = status === 'PAUSED'
-      if (!isPlaying && !isPaused) return
+      // Cancel any in-flight processing
+      pitchAbortRef.current?.abort()
+      pitchAbortRef.current = null
+      pitchProcessingRef.current = false
 
-      // Capture current position before teardown
+      // Invalidate effective buffer
+      effectiveBufferRef.current = state.pitch === 0 ? audioBufferRef.current : null
+
+      const status = usePlaybackStore.getState().status
+      if (status !== 'PLAYING' && status !== 'PAUSED') return
+
+      // Save current position before teardown
       if (sourceNodeRef.current) {
         const ctx = audioCtxRef.current
         if (ctx) {
           savedPositionRef.current = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
         }
-      } else if (shifterRef.current) {
-        savedPositionRef.current = shifterRef.current.timePlayed
       }
-
       stopTimeUpdates()
       destroySourceNode()
-      destroyShifter()
-
-      // When paused, just save position — play() will set up the correct source
-      // for the new pitch value when the user resumes.
-      if (isPaused) return
-
-      // Rebuild source for the new pitch value while playing
-      if (state.pitch === 0) {
-        createSourceNode(savedPositionRef.current)
-      } else {
-        createShifter()
-        if (shifterRef.current && audioBufferRef.current) {
-          shifterRef.current.percentagePlayed = savedPositionRef.current / audioBufferRef.current.duration
-        }
-      }
-      startTimeUpdates()
+      audioCtxRef.current?.suspend()
+      usePlaybackStore.getState().setStatus('PAUSED')
     })
     return unsub
-  }, [stopTimeUpdates, destroySourceNode, destroyShifter, createSourceNode, createShifter, startTimeUpdates])
+  }, [stopTimeUpdates, destroySourceNode])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      pitchAbortRef.current?.abort()
       stopTimeUpdates()
       destroySourceNode()
-      destroyShifter()
       if (gainNodeRef.current) {
         gainNodeRef.current.disconnect()
         gainNodeRef.current = null
@@ -221,29 +157,42 @@ export function useLocalAudioPlayer() {
         audioCtxRef.current = null
       }
     }
-  }, [stopTimeUpdates, destroySourceNode, destroyShifter])
+  }, [stopTimeUpdates, destroySourceNode])
 
   const loadFile = useCallback((objectUrl: string) => {
     const ctx = ensureAudioContext()
+
+    // Cancel any ongoing pitch processing for the old file
+    pitchAbortRef.current?.abort()
+    pitchAbortRef.current = null
+    pitchProcessingRef.current = false
+    pitchCacheRef.current = null
+    effectiveBufferRef.current = null
+
     destroySourceNode()
-    destroyShifter()
     stopTimeUpdates()
     savedPositionRef.current = 0
 
-    // Store the loading promise so play() can await it
     loadingRef.current = (async () => {
       const response = await fetch(objectUrl)
       const arrayBuffer = await response.arrayBuffer()
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
       audioBufferRef.current = audioBuffer
 
+      // Pitch=0: effective buffer is the original; otherwise defer until play()
+      const pitch = useSongStore.getState().pitch
+      effectiveBufferRef.current = pitch === 0 ? audioBuffer : null
+
       usePlaybackStore.getState().setDuration(audioBuffer.duration)
       usePlaybackStore.getState().setCurrentTime(0)
       usePlaybackStore.getState().setStatus('IDLE')
     })()
-  }, [ensureAudioContext, destroySourceNode, destroyShifter, stopTimeUpdates])
+  }, [ensureAudioContext, destroySourceNode, stopTimeUpdates])
 
   const play = useCallback(async () => {
+    // Prevent re-entry while pitch processing is in progress
+    if (pitchProcessingRef.current) return
+
     // Wait for any pending file load to finish
     if (loadingRef.current) {
       await loadingRef.current
@@ -253,21 +202,42 @@ export function useLocalAudioPlayer() {
     const ctx = ensureAudioContext()
     const pitch = useSongStore.getState().pitch
 
-    let created: boolean
-    if (pitch === 0) {
-      // Direct mode: bypass SoundTouch entirely to avoid WSOLA artifacts
-      created = createSourceNode(savedPositionRef.current)
-    } else {
-      // Always recreate shifter to avoid stale SoundTouch buffers that
-      // cause spurious onEnd callbacks after pause/seek.
-      created = createShifter()
-      if (created && savedPositionRef.current > 0 && shifterRef.current && audioBufferRef.current) {
-        // NOTE: percentagePlayed setter expects a 0–1 fraction, NOT 0–100.
-        shifterRef.current.percentagePlayed = savedPositionRef.current / audioBufferRef.current.duration
+    // Ensure we have an effective buffer to play from
+    if (!effectiveBufferRef.current) {
+      if (pitch === 0) {
+        effectiveBufferRef.current = audioBufferRef.current
+      } else {
+        // Check cache first
+        if (pitchCacheRef.current?.semitones === pitch) {
+          effectiveBufferRef.current = pitchCacheRef.current.buffer
+        } else {
+          // Offline phase vocoder processing
+          if (!audioBufferRef.current) return
+
+          pitchProcessingRef.current = true
+          const abort = new AbortController()
+          pitchAbortRef.current = abort
+
+          let processed: AudioBuffer | null = null
+          try {
+            processed = await pitchShiftBuffer(audioBufferRef.current, pitch, ctx, abort.signal)
+          } finally {
+            pitchProcessingRef.current = false
+            pitchAbortRef.current = null
+          }
+
+          if (!processed) return // aborted (e.g. pitch changed mid-processing)
+
+          pitchCacheRef.current = { semitones: pitch, buffer: processed }
+          effectiveBufferRef.current = processed
+        }
       }
     }
 
-    if (!created) return // no buffer yet
+    if (!effectiveBufferRef.current) return
+
+    const created = createSourceNode(savedPositionRef.current)
+    if (!created) return
 
     if (ctx.state === 'suspended') {
       await ctx.resume()
@@ -275,19 +245,16 @@ export function useLocalAudioPlayer() {
 
     startTimeUpdates()
     usePlaybackStore.getState().setStatus('PLAYING')
-  }, [ensureAudioContext, createSourceNode, createShifter, startTimeUpdates])
+  }, [ensureAudioContext, createSourceNode, startTimeUpdates])
 
   const pause = useCallback(() => {
     if (sourceNodeRef.current) {
-      // Direct mode: save current position from AudioContext clock before stopping
       const ctx = audioCtxRef.current
       if (ctx) {
         savedPositionRef.current = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
       }
       try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
       sourceNodeRef.current = null
-    } else if (shifterRef.current) {
-      savedPositionRef.current = shifterRef.current.timePlayed
     }
     audioCtxRef.current?.suspend()
     stopTimeUpdates()
@@ -295,7 +262,7 @@ export function useLocalAudioPlayer() {
   }, [stopTimeUpdates])
 
   const seekTo = useCallback((seconds: number) => {
-    const buffer = audioBufferRef.current
+    const buffer = effectiveBufferRef.current
     if (!buffer) return
     const clamped = Math.max(0, Math.min(buffer.duration, seconds))
     savedPositionRef.current = clamped
@@ -304,28 +271,10 @@ export function useLocalAudioPlayer() {
     const status = usePlaybackStore.getState().status
     if (status !== 'PLAYING' && status !== 'PAUSED') return
 
-    const pitch = useSongStore.getState().pitch
-
-    if (pitch === 0) {
-      // Recreate source at new position; time-update RAF continues seamlessly
-      createSourceNode(clamped)
-      if (status === 'PAUSED') audioCtxRef.current?.suspend()
-    } else {
-      // Always recreate shifter to flush stale SoundTouch internal buffers.
-      // Without this, setting percentagePlayed on an existing shifter causes
-      // the onEnd callback to fire spuriously (SoundTouch returns 0 frames).
-      destroyShifter()
-      createShifter()
-      // NOTE: percentagePlayed setter expects a 0–1 fraction, NOT 0–100.
-      if (shifterRef.current) {
-        shifterRef.current.percentagePlayed = clamped / buffer.duration
-      }
-      // If paused, suspend context so new shifter doesn't start playing
-      if (status === 'PAUSED') {
-        audioCtxRef.current?.suspend()
-      }
-    }
-  }, [createSourceNode, destroyShifter, createShifter])
+    // Recreate source at new position; time-update RAF continues seamlessly
+    createSourceNode(clamped)
+    if (status === 'PAUSED') audioCtxRef.current?.suspend()
+  }, [createSourceNode])
 
   const getCurrentTime = useCallback((): number => {
     if (sourceNodeRef.current) {
@@ -334,14 +283,11 @@ export function useLocalAudioPlayer() {
         return startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
       }
     }
-    if (shifterRef.current) {
-      return shifterRef.current.timePlayed
-    }
     return savedPositionRef.current
   }, [])
 
   const getDuration = useCallback((): number => {
-    return audioBufferRef.current?.duration ?? 0
+    return (effectiveBufferRef.current ?? audioBufferRef.current)?.duration ?? 0
   }, [])
 
   return useMemo(
