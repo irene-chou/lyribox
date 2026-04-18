@@ -200,6 +200,14 @@ export function useLocalAudioPlayer() {
     }
 
     const ctx = ensureAudioContext()
+
+    // Resume immediately while still in the user-gesture context.
+    // Must happen before any await that yields to the event loop,
+    // otherwise the browser may refuse resume() due to autoplay policy.
+    if (ctx.state === 'suspended') {
+      await ctx.resume()
+    }
+
     const pitch = useSongStore.getState().pitch
 
     // Ensure we have an effective buffer to play from
@@ -221,12 +229,15 @@ export function useLocalAudioPlayer() {
           let processed: AudioBuffer | null = null
           try {
             processed = await pitchShiftBuffer(audioBufferRef.current, pitch, ctx, abort.signal)
+          } catch {
+            // Processing failed (e.g. out of memory); bail out cleanly
+            return
           } finally {
             pitchProcessingRef.current = false
             pitchAbortRef.current = null
           }
 
-          if (!processed) return // aborted (e.g. pitch changed mid-processing)
+          if (!processed) return // aborted (pitch changed mid-processing)
 
           pitchCacheRef.current = { semitones: pitch, buffer: processed }
           effectiveBufferRef.current = processed
@@ -239,8 +250,9 @@ export function useLocalAudioPlayer() {
     const created = createSourceNode(savedPositionRef.current)
     if (!created) return
 
-    if (ctx.state === 'suspended') {
-      await ctx.resume()
+    // Resume again in case pause() was called during processing
+    if (audioCtxRef.current?.state === 'suspended') {
+      await audioCtxRef.current.resume()
     }
 
     startTimeUpdates()
