@@ -39,6 +39,9 @@
     width: 100vw;
     margin-top: auto;
     padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .lyrics-scroll-container::-webkit-scrollbar { width: 0; }
@@ -117,8 +120,9 @@
   let currentLineIndex = -1;
   let activeFontSize = 32;
   let otherFontSize = 28;
-  let baseLineHeight = 1.6;
   let titleFontSize = 18;
+  let showTitle = true;
+  let lyricsGap = 16;
   let visibleBefore = 0;
   let visibleAfter = 1;
   let activeColor = '#ffffff';
@@ -128,6 +132,10 @@
   let syncChannel = null;
   let lastMessageTime = 0;
 
+  function applyGap() {
+    document.getElementById('lyricsContainer').style.gap = lyricsGap + 'px';
+  }
+
   function applyColors() {
     document.body.style.background = lyricsBgColor === 'transparent' ? 'transparent' : lyricsBgColor;
   }
@@ -136,7 +144,7 @@
     const el = document.getElementById('nowSinging');
     const titleEl = document.getElementById('nowSingingTitle');
     const labelEl = document.querySelector('.now-singing-label');
-    if (songTitle && lyrics.length > 0) {
+    if (showTitle && songTitle && lyrics.length > 0) {
       titleEl.textContent = songTitle;
       labelEl.style.fontSize = Math.round(titleFontSize * 0.72) + 'px';
       titleEl.style.fontSize = titleFontSize + 'px';
@@ -177,8 +185,9 @@
             currentLineIndex = data.currentLineIndex;
             activeFontSize = data.activeFontSize || 32;
             otherFontSize = data.otherFontSize || 28;
-            baseLineHeight = data.baseLineHeight || 1.6;
             titleFontSize = data.titleFontSize || 18;
+            showTitle = data.showTitle ?? true;
+            lyricsGap = data.lyricsGap ?? 16;
             visibleBefore = data.visibleBefore ?? 0;
             visibleAfter = data.visibleAfter ?? 1;
             activeColor = data.activeColor || '#ffffff';
@@ -189,6 +198,7 @@
             updateActiveLine();
             updateNowSinging();
             applyColors();
+            applyGap();
             break;
           case 'LYRICS_LOADED':
             lyrics = data.lyrics || [];
@@ -217,11 +227,12 @@
             break;
           case 'TITLE_FONT_SIZE':
             titleFontSize = data.titleFontSize;
+            showTitle = data.showTitle ?? true;
             updateNowSinging();
             break;
-          case 'LINE_HEIGHT':
-            baseLineHeight = data.baseLineHeight;
-            updateActiveLine();
+          case 'LYRICS_GAP':
+            lyricsGap = data.lyricsGap ?? 16;
+            applyGap();
             break;
           case 'VISIBLE_RANGE':
             visibleBefore = data.visibleBefore ?? 0;
@@ -266,7 +277,6 @@
       div.className = 'lyric-line upcoming';
       div.id = `lyric-${index}`;
       div.style.fontSize = otherFontSize + 'px';
-      div.style.lineHeight = baseLineHeight;
       div.style.color = otherColor;
 
       if (item.text === '' || item.text === '//') {
@@ -290,12 +300,10 @@
       if (i === currentLineIndex) {
         line.classList.add('active', 'visible');
         line.style.fontSize = activeFontSize + 'px';
-        line.style.lineHeight = baseLineHeight;
         line.style.color = activeColor;
       } else {
         line.classList.add('next', 'visible');
         line.style.fontSize = otherFontSize + 'px';
-        line.style.lineHeight = baseLineHeight;
         line.style.color = otherColor;
       }
     });
