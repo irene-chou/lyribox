@@ -44,10 +44,13 @@ export function useSyncEngine({ getCurrentTime }: UseSyncEngineOptions) {
     workerRef.current = worker
 
     worker.onmessage = () => {
+      const rawTime = getCurrentTimeRef.current()
+      // Single source of truth for displayed time while playing (~12.5Hz)
+      usePlaybackStore.getState().setCurrentTime(rawTime)
+
       const { lyrics, offset } = useSongStore.getState()
       if (!lyrics.length) return
 
-      const rawTime = getCurrentTimeRef.current()
       const currentTime = rawTime + offset
 
       // Reverse scan to find active line (same algorithm as legacy)
@@ -63,9 +66,6 @@ export function useSyncEngine({ getCurrentTime }: UseSyncEngineOptions) {
       if (newIndex !== prevIndex) {
         useSyncStore.getState().setCurrentLineIndex(newIndex)
       }
-
-      // Also update current time in playback store for UI display
-      usePlaybackStore.getState().setCurrentTime(rawTime)
     }
 
     return () => {

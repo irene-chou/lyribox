@@ -29,6 +29,7 @@ export function useLocalAudioPlayer() {
 
   stopTimeUpdatesRef.current = stopTimeUpdates
 
+  // Watches for end-of-buffer; displayed time is pushed by the sync engine
   const startTimeUpdates = useCallback(() => {
     const update = () => {
       const buffer = effectiveBufferRef.current
@@ -36,13 +37,13 @@ export function useLocalAudioPlayer() {
       if (!buffer || !ctx || !sourceNodeRef.current) return
 
       const time = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
-      usePlaybackStore.getState().setCurrentTime(time)
 
       if (time >= buffer.duration) {
         stopTimeUpdatesRef.current()
         try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
         sourceNodeRef.current = null
         savedPositionRef.current = 0
+        usePlaybackStore.getState().setCurrentTime(buffer.duration)
         usePlaybackStore.getState().setStatus('ENDED')
         return
       }
@@ -270,6 +271,7 @@ export function useLocalAudioPlayer() {
     }
     audioCtxRef.current?.suspend()
     stopTimeUpdates()
+    usePlaybackStore.getState().setCurrentTime(savedPositionRef.current)
     usePlaybackStore.getState().setStatus('PAUSED')
   }, [stopTimeUpdates])
 
