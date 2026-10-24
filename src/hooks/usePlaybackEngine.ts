@@ -127,7 +127,7 @@ export function usePlaybackEngine() {
       case 'manual':
         return 0 // manual has no known duration
     }
-  }, [getActiveEngine, youtube, localAudio, manual])
+  }, [getActiveEngine, youtube, localAudio])
 
   // Stop all engines (used when clearing/switching songs)
   const stopAll = useCallback(() => {
