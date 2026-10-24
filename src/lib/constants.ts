@@ -20,6 +20,7 @@ export const OFFSET_BTN_STYLE: React.CSSProperties = {
 }
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
+  persistLocalAudio: true,
   activeFontSize: 32,
   otherFontSize: 28,
   titleFontSize: 18,

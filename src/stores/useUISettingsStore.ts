@@ -15,6 +15,7 @@ interface UISettingsState extends UISettings {
   setOtherColor: (color: string) => void
   setLyricsBgColor: (color: string) => void
   setSidebarWidth: (width: number) => void
+  setPersistLocalAudio: (persist: boolean) => void
   resetAll: () => void
 }
 
@@ -34,6 +35,7 @@ export const useUISettingsStore = create<UISettingsState>()(
       setOtherColor: (color: string) => set({ otherColor: color }),
       setLyricsBgColor: (color: string) => set({ lyricsBgColor: color }),
       setSidebarWidth: (width: number) => set({ sidebarWidth: width }),
+      setPersistLocalAudio: (persist: boolean) => set({ persistLocalAudio: persist }),
       resetAll: () => set({ ...DEFAULT_UI_SETTINGS }),
     }),
     {

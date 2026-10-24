@@ -12,7 +12,9 @@ import { LrcInputTabs } from './LrcInputTabs'
 import { saveSongToDB } from '@/hooks/useSongLibrary'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
+import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { extractVideoId } from '@/lib/format'
+import { saveAudioFile, getAudioFile, deleteAudioFile } from '@/lib/audio-file-store'
 import type { Song, AudioSource } from '@/types'
 
 interface SongModalProps {
@@ -28,19 +30,25 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
   const [audioFileName, setAudioFileName] = useState('')
   const [lrcText, setLrcText] = useState('')
   const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [persistAudio, setPersistAudio] = useState(true)
+  // Size of the copy already stored for the song being edited (null = none)
+  const [storedAudioSize, setStoredAudioSize] = useState<number | null>(null)
 
   const isEditMode = !!editSong
   const loadSong = useSongStore((s) => s.loadSong)
 
   useEffect(() => {
-    if (open && editSong) {
+    if (!open) return
+    setPersistAudio(useUISettingsStore.getState().persistLocalAudio)
+    setStoredAudioSize(null)
+    if (editSong) {
       setName(editSong.name)
       setAudioSource(editSong.audioSource)
       setYoutubeUrl(editSong.youtubeId || '')
       setAudioFileName(editSong.audioFileName || '')
       setLrcText(editSong.lrcText)
       setAudioFile(null)
-    } else if (open && !editSong) {
+    } else {
       setName('')
       setAudioSource('youtube')
       setYoutubeUrl('')
@@ -48,6 +56,18 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
       setLrcText('')
       setAudioFile(null)
     }
+  }, [open, editSong])
+
+  // Look up whether the edited song already has a stored audio copy
+  useEffect(() => {
+    if (!open || !editSong) return
+    let cancelled = false
+    getAudioFile(editSong.id).then((record) => {
+      if (cancelled || !record) return
+      setStoredAudioSize(record.size)
+      setPersistAudio(true)
+    })
+    return () => { cancelled = true }
   }, [open, editSong])
 
   async function handleSave() {
@@ -75,6 +95,18 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
     }
 
     await saveSongToDB(song)
+
+    // Keep or drop the browser-stored copy of the local audio file
+    if (audioSource === 'local') {
+      if (audioFile && persistAudio) {
+        await saveAudioFile(song.id, audioFile)
+      } else if (!persistAudio && storedAudioSize !== null) {
+        await deleteAudioFile(song.id)
+      }
+    } else if (storedAudioSize !== null) {
+      await deleteAudioFile(song.id)
+    }
+
     loadSong(song)
 
     // If local audio, create object URL for playback
@@ -89,6 +121,11 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
   function handleAudioFileChange(file: File, fileName: string) {
     setAudioFile(file)
     setAudioFileName(fileName)
+  }
+
+  function handlePersistAudioChange(persist: boolean) {
+    setPersistAudio(persist)
+    useUISettingsStore.getState().setPersistLocalAudio(persist)
   }
 
   function handleSearchSelect(text: string, trackName: string) {
@@ -164,6 +201,10 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
             onYoutubeUrlChange={setYoutubeUrl}
             audioFileName={audioFileName}
             onAudioFileChange={handleAudioFileChange}
+            persistAudio={persistAudio}
+            onPersistAudioChange={handlePersistAudioChange}
+            storedSize={audioFile ? audioFile.size : storedAudioSize}
+            alreadyStored={storedAudioSize !== null}
           />
 
           {/* LRC input */}

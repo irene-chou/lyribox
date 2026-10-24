@@ -14,6 +14,7 @@ import { FolderSection } from './FolderSection'
 import {
   useSongs,
   useFolders,
+  useStoredAudioSongIds,
   deleteSongFromDB,
   createFolder,
   updateFolder,
@@ -22,6 +23,8 @@ import {
 } from '@/hooks/useSongLibrary'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
+import { useUISettingsStore } from '@/stores/useUISettingsStore'
+import { saveAudioFile } from '@/lib/audio-file-store'
 import type { Song, Folder } from '@/types'
 
 interface SongDrawerProps {
@@ -34,6 +37,7 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
   const [search, setSearch] = useState('')
   const songs = useSongs()
   const folders = useFolders()
+  const storedAudioIds = useStoredAudioSongIds()
   const { currentSongId, loadSong } = useSongStore()
   const localFileInputRef = useRef<HTMLInputElement>(null)
   const pendingSongRef = useRef<Song | null>(null)
@@ -68,25 +72,28 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
 
   const handleSelect = useCallback((song: Song) => {
     loadSong(song)
-    if (song.audioSource === 'local') {
+    // Stored audio is restored automatically (useLocalAudioRestore); only ask
+    // for a file when nothing is stored for this song.
+    if (song.audioSource === 'local' && !storedAudioIds?.has(song.id)) {
       pendingSongRef.current = song
       localFileInputRef.current?.click()
     }
     onOpenChange(false)
-  }, [loadSong, onOpenChange])
+  }, [loadSong, onOpenChange, storedAudioIds])
 
   function handleLocalFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) {
-      pendingSongRef.current = null
-      return
-    }
+    const song = pendingSongRef.current
+    pendingSongRef.current = null
+    if (!file) return
     const objectUrl = URL.createObjectURL(file)
     usePlaybackStore.getState().setAudioFileObjectUrl(objectUrl)
-    if (pendingSongRef.current && file.name !== pendingSongRef.current.audioFileName) {
+    if (song && file.name !== song.audioFileName) {
       useSongStore.getState().setAudioFileName(file.name)
     }
-    pendingSongRef.current = null
+    if (song && useUISettingsStore.getState().persistLocalAudio) {
+      void saveAudioFile(song.id, file)
+    }
     e.target.value = ''
   }
 

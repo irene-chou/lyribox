@@ -26,7 +26,19 @@ export interface Song {
   updatedAt: number
 }
 
+/** Local audio file persisted in IndexedDB so the user need not re-pick it. */
+export interface AudioFileRecord {
+  songId: number
+  name: string
+  type: string
+  size: number
+  blob: Blob
+  savedAt: number
+}
+
 export interface UISettings {
+  /** Store picked local audio files in the browser (IndexedDB). */
+  persistLocalAudio: boolean
   activeFontSize: number
   otherFontSize: number
   titleFontSize: number

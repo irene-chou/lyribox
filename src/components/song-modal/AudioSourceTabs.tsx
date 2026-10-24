@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { formatBytes } from '@/lib/audio-file-store'
 import type { AudioSource } from '@/types'
 
 const inputStyle: React.CSSProperties = {
@@ -32,6 +33,13 @@ interface AudioSourceTabsProps {
   onYoutubeUrlChange: (url: string) => void
   audioFileName: string
   onAudioFileChange: (file: File, fileName: string) => void
+  /** Whether to keep the picked file in the browser's storage. */
+  persistAudio: boolean
+  onPersistAudioChange: (persist: boolean) => void
+  /** Size of the file that would be stored (newly picked or already stored). */
+  storedSize: number | null
+  /** True when a copy is already stored for this song. */
+  alreadyStored: boolean
 }
 
 export function AudioSourceTabs({
@@ -41,6 +49,10 @@ export function AudioSourceTabs({
   onYoutubeUrlChange,
   audioFileName,
   onAudioFileChange,
+  persistAudio,
+  onPersistAudioChange,
+  storedSize,
+  alreadyStored,
 }: AudioSourceTabsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -126,6 +138,25 @@ export function AudioSourceTabs({
             onChange={handleFileSelect}
             style={{ display: 'none' }}
           />
+          <label
+            className="flex items-start text-lb-text-secondary cursor-pointer"
+            style={{ gap: '8px', marginTop: '10px', fontSize: '12px', lineHeight: 1.5 }}
+          >
+            <input
+              type="checkbox"
+              checked={persistAudio}
+              onChange={(e) => onPersistAudioChange(e.target.checked)}
+              style={{ marginTop: '3px', accentColor: 'var(--lb-accent)' }}
+            />
+            <span>
+              將音檔儲存在瀏覽器中，下次載入不必重新選取
+              <span className="block text-lb-text-dim" style={{ fontSize: '11px' }}>
+                會佔用瀏覽器儲存空間
+                {storedSize !== null && `（${formatBytes(storedSize)}）`}
+                {alreadyStored && !persistAudio && '，取消勾選並儲存後將刪除已存的音檔'}
+              </span>
+            </span>
+          </label>
         </TabsContent>
       </Tabs>
     </div>

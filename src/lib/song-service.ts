@@ -41,7 +41,10 @@ export function debouncedSaveSong(delay = 600) {
  * Delete a song from IndexedDB by id.
  */
 export async function deleteSongFromDB(id: number): Promise<void> {
-  await db.songs.delete(id)
+  await db.transaction('rw', db.songs, db.audioFiles, async () => {
+    await db.songs.delete(id)
+    await db.audioFiles.delete(id)
+  })
 }
 
 /**
