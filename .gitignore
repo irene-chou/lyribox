@@ -30,3 +30,6 @@ blob-report/
 
 # OS
 .DS_Store
+
+# Claude Code local state
+.claude/worktrees/
