@@ -2,6 +2,9 @@ import { useEffect, useRef, useCallback } from 'react'
 import { Play, Pause } from 'lucide-react'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
+import { useUISettingsStore } from '@/stores/useUISettingsStore'
+import { useLocalAudioRestore } from '@/hooks/useLocalAudioRestore'
+import { saveAudioFile } from '@/lib/audio-file-store'
 import { YouTubePlayer } from './YouTubePlayer'
 import { ManualTimerPanel } from './ManualTimerPanel'
 import { PlaybackInfo } from './PlaybackInfo'
@@ -22,6 +25,9 @@ export function AudioPlayer({ engine, onSeek }: AudioPlayerProps) {
   const status = usePlaybackStore((s) => s.status)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Restore a stored local file for the current song, if any
+  useLocalAudioRestore()
+
   // Load local audio file when URL changes
   useEffect(() => {
     if (audioSource === 'local' && audioFileObjectUrl) {
@@ -36,6 +42,10 @@ export function AudioPlayer({ engine, onSeek }: AudioPlayerProps) {
     usePlaybackStore.getState().setAudioFileObjectUrl(objectUrl)
     if (file.name !== audioFileName) {
       useSongStore.getState().setAudioFileName(file.name)
+    }
+    const songId = useSongStore.getState().currentSongId
+    if (songId !== null && useUISettingsStore.getState().persistLocalAudio) {
+      void saveAudioFile(songId, file)
     }
     e.target.value = ''
   }, [audioFileName])

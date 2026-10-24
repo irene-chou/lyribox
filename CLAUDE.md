@@ -92,12 +92,12 @@ public/
 ### Web Workers
 No standalone worker files — all are inline Blob Workers created at runtime:
 - **Sync Worker** (80ms tick) in `useSyncEngine.ts` — drives lyric line computation
-- **Pitch Workers** in `lib/pitch-shift.ts` — one per channel; source built from `pitchShiftChannel.toString()`, so that function must stay self-contained
 - Cleaned up via `URL.revokeObjectURL` + `worker.terminate()`
 
 ### Audio Sources
 - **YouTube:** IFrame API loaded lazily (singleton pattern), managed by `useYouTubePlayer`
-- **Local files:** `HTMLAudioElement` via `useLocalAudioPlayer`, blob URLs managed by `usePlaybackStore`
+- **Local files:** decoded to an `AudioBuffer` and played through a Signalsmith Stretch AudioWorklet (`lib/stretch-player.ts`, wraps the `signalsmith-stretch` WASM package) via `useLocalAudioPlayer`; pitch (升降 Key) is applied in real time, no reprocessing. The library is imported with `?url` + dynamic import so the bundler never minifies its self-stringifying worklet code.
+- **Stored local files:** picked files are optionally persisted as Blobs in the `audioFiles` Dexie table (`lib/audio-file-store.ts`, keyed by songId, separate from `songs` so list queries stay light); `useLocalAudioRestore` reloads them when a song is selected. Preference lives in `useUISettingsStore.persistLocalAudio`.
 - **Manual timer:** Fallback when lyrics exist but no audio source is configured
 
 ### OBS Sync

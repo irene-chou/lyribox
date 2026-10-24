@@ -1,55 +1,28 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useSongStore } from '@/stores/useSongStore'
-import { pitchShiftBuffer } from '@/lib/pitch-shift'
+import { createStretchPlayer, type StretchPlayer } from '@/lib/stretch-player'
 
+/**
+ * Local file playback through a Signalsmith Stretch worklet. The worklet owns
+ * the decoded samples and applies the pitch shift in real time, so changing the
+ * key while playing is seamless and never needs reprocessing.
+ */
 export function useLocalAudioPlayer() {
-  const audioBufferRef = useRef<AudioBuffer | null>(null)  // original decoded buffer
-  const effectiveBufferRef = useRef<AudioBuffer | null>(null)  // buffer in use (may be pitch-shifted)
-  const pitchCacheRef = useRef<{ semitones: number; buffer: AudioBuffer } | null>(null)
-  const pitchProcessingRef = useRef(false)
-  const pitchAbortRef = useRef<AbortController | null>(null)
-
   const audioCtxRef = useRef<AudioContext | null>(null)
   const gainNodeRef = useRef<GainNode | null>(null)
+  const playerRef = useRef<StretchPlayer | null>(null)
+  const playerPromiseRef = useRef<Promise<StretchPlayer> | null>(null)
+
+  const durationRef = useRef(0)
   const savedPositionRef = useRef(0)
   const rafIdRef = useRef(0)
   const loadingRef = useRef<Promise<void> | null>(null)
-
-  // AudioBufferSourceNode playback state
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
-  const startContextTimeRef = useRef(0)
-  const startOffsetRef = useRef(0)
-
-  const stopTimeUpdatesRef = useRef(() => {})
+  const loadGenerationRef = useRef(0)
+  const startingRef = useRef(false)
 
   const stopTimeUpdates = useCallback(() => {
     cancelAnimationFrame(rafIdRef.current)
-  }, [])
-
-  stopTimeUpdatesRef.current = stopTimeUpdates
-
-  // Watches for end-of-buffer; displayed time is pushed by the sync engine
-  const startTimeUpdates = useCallback(() => {
-    const update = () => {
-      const buffer = effectiveBufferRef.current
-      const ctx = audioCtxRef.current
-      if (!buffer || !ctx || !sourceNodeRef.current) return
-
-      const time = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
-
-      if (time >= buffer.duration) {
-        stopTimeUpdatesRef.current()
-        try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
-        sourceNodeRef.current = null
-        savedPositionRef.current = 0
-        usePlaybackStore.getState().setCurrentTime(buffer.duration)
-        usePlaybackStore.getState().setStatus('ENDED')
-        return
-      }
-      rafIdRef.current = requestAnimationFrame(update)
-    }
-    rafIdRef.current = requestAnimationFrame(update)
   }, [])
 
   const ensureAudioContext = useCallback(() => {
@@ -59,38 +32,59 @@ export function useLocalAudioPlayer() {
     return audioCtxRef.current
   }, [])
 
-  const destroySourceNode = useCallback(() => {
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
-      sourceNodeRef.current.disconnect()
-      sourceNodeRef.current = null
-    }
-  }, [])
-
-  const createSourceNode = useCallback((offset: number) => {
-    const ctx = audioCtxRef.current
-    const buffer = effectiveBufferRef.current
-    if (!ctx || !buffer) return false
-
-    destroySourceNode()
-
+  const ensureGain = useCallback((ctx: AudioContext) => {
     if (!gainNodeRef.current) {
       gainNodeRef.current = ctx.createGain()
       gainNodeRef.current.connect(ctx.destination)
     }
     const { volume, muted } = usePlaybackStore.getState()
     gainNodeRef.current.gain.value = muted ? 0 : volume / 100
+    return gainNodeRef.current
+  }, [])
 
-    const clampedOffset = Math.max(0, Math.min(buffer.duration, offset))
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.connect(gainNodeRef.current)
-    source.start(0, clampedOffset)
-    sourceNodeRef.current = source
-    startContextTimeRef.current = ctx.currentTime
-    startOffsetRef.current = clampedOffset
-    return true
-  }, [destroySourceNode])
+  // Create the stretch node once per AudioContext (loads WASM on first use)
+  const ensurePlayer = useCallback((ctx: AudioContext) => {
+    if (!playerPromiseRef.current) {
+      playerPromiseRef.current = createStretchPlayer(ctx).then((player) => {
+        player.connect(ensureGain(ctx))
+        playerRef.current = player
+        return player
+      })
+    }
+    return playerPromiseRef.current
+  }, [ensureGain])
+
+  const getCurrentTime = useCallback((): number => {
+    const player = playerRef.current
+    if (player?.isPlaying()) return Math.min(player.getCurrentTime(), durationRef.current)
+    return savedPositionRef.current
+  }, [])
+
+  const stopPlayback = useCallback(async () => {
+    const player = playerRef.current
+    if (!player) return
+    savedPositionRef.current = getCurrentTime()
+    await player.stop()
+  }, [getCurrentTime])
+
+  // Watches for end-of-buffer; displayed time is pushed by the sync engine
+  const startTimeUpdates = useCallback(() => {
+    const update = () => {
+      const player = playerRef.current
+      if (!player?.isPlaying()) return
+
+      if (player.getCurrentTime() >= durationRef.current) {
+        stopTimeUpdates()
+        void player.stop()
+        savedPositionRef.current = 0
+        usePlaybackStore.getState().setCurrentTime(durationRef.current)
+        usePlaybackStore.getState().setStatus('ENDED')
+        return
+      }
+      rafIdRef.current = requestAnimationFrame(update)
+    }
+    rafIdRef.current = requestAnimationFrame(update)
+  }, [stopTimeUpdates])
 
   // Sync volume/muted from store to GainNode
   useEffect(() => {
@@ -108,47 +102,25 @@ export function useLocalAudioPlayer() {
     return unsub
   }, [])
 
-  // When pitch changes: cancel ongoing processing, invalidate effective buffer,
-  // stop playback (user must click play again to trigger re-processing).
+  // Pitch changes apply live, even mid-playback
   useEffect(() => {
     let prevPitch = useSongStore.getState().pitch
 
     const unsub = useSongStore.subscribe((state) => {
       if (state.pitch === prevPitch) return
       prevPitch = state.pitch
-
-      // Cancel any in-flight processing
-      pitchAbortRef.current?.abort()
-      pitchAbortRef.current = null
-      pitchProcessingRef.current = false
-
-      // Invalidate effective buffer
-      effectiveBufferRef.current = state.pitch === 0 ? audioBufferRef.current : null
-
-      const status = usePlaybackStore.getState().status
-      if (status !== 'PLAYING' && status !== 'PAUSED') return
-
-      // Save current position before teardown
-      if (sourceNodeRef.current) {
-        const ctx = audioCtxRef.current
-        if (ctx) {
-          savedPositionRef.current = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
-        }
-      }
-      stopTimeUpdates()
-      destroySourceNode()
-      audioCtxRef.current?.suspend()
-      usePlaybackStore.getState().setStatus('PAUSED')
+      void playerRef.current?.setSemitones(state.pitch)
     })
     return unsub
-  }, [stopTimeUpdates, destroySourceNode])
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      pitchAbortRef.current?.abort()
       stopTimeUpdates()
-      destroySourceNode()
+      playerRef.current?.disconnect()
+      playerRef.current = null
+      playerPromiseRef.current = null
       if (gainNodeRef.current) {
         gainNodeRef.current.disconnect()
         gainNodeRef.current = null
@@ -158,151 +130,96 @@ export function useLocalAudioPlayer() {
         audioCtxRef.current = null
       }
     }
-  }, [stopTimeUpdates, destroySourceNode])
+  }, [stopTimeUpdates])
 
   const loadFile = useCallback((objectUrl: string) => {
     const ctx = ensureAudioContext()
+    const generation = ++loadGenerationRef.current
 
-    // Cancel any ongoing pitch processing for the old file
-    pitchAbortRef.current?.abort()
-    pitchAbortRef.current = null
-    pitchProcessingRef.current = false
-    pitchCacheRef.current = null
-    effectiveBufferRef.current = null
-
-    destroySourceNode()
     stopTimeUpdates()
+    void stopPlayback()
     savedPositionRef.current = 0
+    durationRef.current = 0
 
     loadingRef.current = (async () => {
       const response = await fetch(objectUrl)
       const arrayBuffer = await response.arrayBuffer()
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-      audioBufferRef.current = audioBuffer
+      const [audioBuffer, player] = await Promise.all([
+        ctx.decodeAudioData(arrayBuffer),
+        ensurePlayer(ctx),
+      ])
+      // A newer loadFile() superseded this one
+      if (generation !== loadGenerationRef.current) return
 
-      // Pitch=0: effective buffer is the original; otherwise defer until play()
-      const pitch = useSongStore.getState().pitch
-      effectiveBufferRef.current = pitch === 0 ? audioBuffer : null
+      const channels = Array.from(
+        { length: audioBuffer.numberOfChannels },
+        (_, ch) => audioBuffer.getChannelData(ch),
+      )
+      await player.load(channels)
+      await player.setSemitones(useSongStore.getState().pitch)
+      if (generation !== loadGenerationRef.current) return
 
+      durationRef.current = audioBuffer.duration
       usePlaybackStore.getState().setDuration(audioBuffer.duration)
       usePlaybackStore.getState().setCurrentTime(0)
       usePlaybackStore.getState().setStatus('IDLE')
     })()
-  }, [ensureAudioContext, destroySourceNode, stopTimeUpdates])
+  }, [ensureAudioContext, ensurePlayer, stopPlayback, stopTimeUpdates])
 
   const play = useCallback(async () => {
-    // Prevent re-entry while pitch processing is in progress
-    if (pitchProcessingRef.current) return
+    if (startingRef.current) return
+    startingRef.current = true
+    try {
+      const ctx = ensureAudioContext()
 
-    // Wait for any pending file load to finish
-    if (loadingRef.current) {
-      await loadingRef.current
-      loadingRef.current = null
-    }
-
-    const ctx = ensureAudioContext()
-
-    // Resume immediately while still in the user-gesture context.
-    // Must happen before any await that yields to the event loop,
-    // otherwise the browser may refuse resume() due to autoplay policy.
-    if (ctx.state === 'suspended') {
-      await ctx.resume()
-    }
-
-    const pitch = useSongStore.getState().pitch
-
-    // Ensure we have an effective buffer to play from
-    if (!effectiveBufferRef.current) {
-      if (pitch === 0) {
-        effectiveBufferRef.current = audioBufferRef.current
-      } else {
-        // Check cache first
-        if (pitchCacheRef.current?.semitones === pitch) {
-          effectiveBufferRef.current = pitchCacheRef.current.buffer
-        } else {
-          // Offline phase vocoder processing
-          if (!audioBufferRef.current) return
-
-          pitchProcessingRef.current = true
-          const abort = new AbortController()
-          pitchAbortRef.current = abort
-
-          let processed: AudioBuffer | null = null
-          try {
-            processed = await pitchShiftBuffer(audioBufferRef.current, pitch, ctx, abort.signal)
-          } catch {
-            // Processing failed (e.g. out of memory); bail out cleanly
-            return
-          } finally {
-            pitchProcessingRef.current = false
-            pitchAbortRef.current = null
-          }
-
-          if (!processed) return // aborted (pitch changed mid-processing)
-
-          pitchCacheRef.current = { semitones: pitch, buffer: processed }
-          effectiveBufferRef.current = processed
-        }
+      // Resume while still in the user-gesture context (autoplay policy)
+      if (ctx.state === 'suspended') {
+        await ctx.resume()
       }
+
+      if (loadingRef.current) {
+        await loadingRef.current
+        loadingRef.current = null
+      }
+
+      const player = playerRef.current
+      if (!player || durationRef.current === 0) return
+
+      // Resume again in case pause() ran while we were waiting
+      if (ctx.state === 'suspended') {
+        await ctx.resume()
+      }
+
+      const offset = Math.max(0, Math.min(durationRef.current, savedPositionRef.current))
+      await player.start(offset, useSongStore.getState().pitch)
+      startTimeUpdates()
+      usePlaybackStore.getState().setStatus('PLAYING')
+    } finally {
+      startingRef.current = false
     }
-
-    if (!effectiveBufferRef.current) return
-
-    const created = createSourceNode(savedPositionRef.current)
-    if (!created) return
-
-    // Resume again in case pause() was called during processing
-    if (audioCtxRef.current?.state === 'suspended') {
-      await audioCtxRef.current.resume()
-    }
-
-    startTimeUpdates()
-    usePlaybackStore.getState().setStatus('PLAYING')
-  }, [ensureAudioContext, createSourceNode, startTimeUpdates])
+  }, [ensureAudioContext, startTimeUpdates])
 
   const pause = useCallback(() => {
-    if (sourceNodeRef.current) {
-      const ctx = audioCtxRef.current
-      if (ctx) {
-        savedPositionRef.current = startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
-      }
-      try { sourceNodeRef.current.stop() } catch { /* already stopped */ }
-      sourceNodeRef.current = null
-    }
-    audioCtxRef.current?.suspend()
     stopTimeUpdates()
+    void stopPlayback()
+    audioCtxRef.current?.suspend()
     usePlaybackStore.getState().setCurrentTime(savedPositionRef.current)
     usePlaybackStore.getState().setStatus('PAUSED')
-  }, [stopTimeUpdates])
+  }, [stopPlayback, stopTimeUpdates])
 
   const seekTo = useCallback((seconds: number) => {
-    const buffer = effectiveBufferRef.current
-    if (!buffer) return
-    const clamped = Math.max(0, Math.min(buffer.duration, seconds))
+    if (durationRef.current === 0) return
+    const clamped = Math.max(0, Math.min(durationRef.current, seconds))
     savedPositionRef.current = clamped
     usePlaybackStore.getState().setCurrentTime(clamped)
 
-    const status = usePlaybackStore.getState().status
-    if (status !== 'PLAYING' && status !== 'PAUSED') return
-
-    // Recreate source at new position; time-update RAF continues seamlessly
-    createSourceNode(clamped)
-    if (status === 'PAUSED') audioCtxRef.current?.suspend()
-  }, [createSourceNode])
-
-  const getCurrentTime = useCallback((): number => {
-    if (sourceNodeRef.current) {
-      const ctx = audioCtxRef.current
-      if (ctx) {
-        return startOffsetRef.current + (ctx.currentTime - startContextTimeRef.current)
-      }
+    const player = playerRef.current
+    if (player?.isPlaying()) {
+      void player.start(clamped, useSongStore.getState().pitch)
     }
-    return savedPositionRef.current
   }, [])
 
-  const getDuration = useCallback((): number => {
-    return (effectiveBufferRef.current ?? audioBufferRef.current)?.duration ?? 0
-  }, [])
+  const getDuration = useCallback((): number => durationRef.current, [])
 
   return useMemo(
     () => ({
