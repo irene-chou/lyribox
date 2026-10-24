@@ -44,8 +44,8 @@ export function useManualTimer() {
       const elapsed = (now - lastTickRef.current) / 1000
       lastTickRef.current = now
 
+      // Displayed time is pushed by the sync engine
       manualTimeRef.current += elapsed
-      usePlaybackStore.getState().setCurrentTime(manualTimeRef.current)
     }
 
     return () => {
@@ -68,6 +68,7 @@ export function useManualTimer() {
     if (!isPlayingRef.current) return
     isPlayingRef.current = false
     workerRef.current?.postMessage('stop')
+    usePlaybackStore.getState().setCurrentTime(manualTimeRef.current)
     usePlaybackStore.getState().setStatus('PAUSED')
   }, [])
 

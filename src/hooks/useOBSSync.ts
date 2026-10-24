@@ -32,6 +32,41 @@ export function useOBSSync() {
   const [isConnected, setIsConnected] = useState(false)
   const sessionId = getSessionId()
 
+  const broadcast = useCallback(
+    (type: SyncMessageType, data: Record<string, unknown>) => {
+      if (!channelRef.current) return
+      try {
+        channelRef.current.publish('sync', { type, data })
+      } catch (e) {
+        console.debug('PieSocket broadcast error:', e)
+      }
+    },
+    [],
+  )
+
+  const broadcastFullState = useCallback(() => {
+    const song = useSongStore.getState()
+    const ui = useUISettingsStore.getState()
+    const sync = useSyncStore.getState()
+
+    broadcast('FULL_STATE', {
+      lyrics: song.lyrics,
+      currentLineIndex: sync.currentLineIndex,
+      activeFontSize: ui.activeFontSize,
+      otherFontSize: ui.otherFontSize,
+      lyricsGap: ui.lyricsGap,
+      titleFontSize: ui.titleFontSize,
+      showTitle: ui.showTitle,
+      visibleBefore: ui.visibleBefore,
+      visibleAfter: ui.visibleAfter,
+      offset: song.offset,
+      activeColor: ui.activeColor,
+      otherColor: ui.otherColor,
+      lyricsBgColor: ui.lyricsBgColor,
+      songTitle: song.currentSongTitle,
+    })
+  }, [broadcast])
+
   // Initialize PieSocket connection
   useEffect(() => {
     if (typeof window === 'undefined' || !window.PieSocket) {
@@ -75,42 +110,7 @@ export function useOBSSync() {
       psRef.current = null
       setIsConnected(false)
     }
-  }, [])
-
-  const broadcast = useCallback(
-    (type: SyncMessageType, data: Record<string, unknown>) => {
-      if (!channelRef.current) return
-      try {
-        channelRef.current.publish('sync', { type, data })
-      } catch (e) {
-        console.debug('PieSocket broadcast error:', e)
-      }
-    },
-    [],
-  )
-
-  const broadcastFullState = useCallback(() => {
-    const song = useSongStore.getState()
-    const ui = useUISettingsStore.getState()
-    const sync = useSyncStore.getState()
-
-    broadcast('FULL_STATE', {
-      lyrics: song.lyrics,
-      currentLineIndex: sync.currentLineIndex,
-      activeFontSize: ui.activeFontSize,
-      otherFontSize: ui.otherFontSize,
-      lyricsGap: ui.lyricsGap,
-      titleFontSize: ui.titleFontSize,
-      showTitle: ui.showTitle,
-      visibleBefore: ui.visibleBefore,
-      visibleAfter: ui.visibleAfter,
-      offset: song.offset,
-      activeColor: ui.activeColor,
-      otherColor: ui.otherColor,
-      lyricsBgColor: ui.lyricsBgColor,
-      songTitle: song.currentSongTitle,
-    })
-  }, [broadcast])
+  }, [broadcastFullState])
 
   // Auto-broadcast on tab visibility change
   useEffect(() => {
