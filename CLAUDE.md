@@ -39,7 +39,7 @@ src/
     useOBSSync.ts         # PieSocket channel connection + full state broadcast
     useYouTubePlayer.ts   # YouTube IFrame API integration
     useLocalAudioPlayer.ts # HTMLAudioElement wrapper
-    useManualTimer.ts     # Web Worker (50ms tick) manual timer
+    useManualTimer.ts     # Manual timer (performance.now()-based, polled by sync engine)
     useSongLibrary.ts     # Dexie live query + re-exports song-service functions
     useKeyboardShortcuts.ts # Global keyboard shortcuts (space, arrows, cmd+s)
     useIsMobile.ts        # matchMedia breakpoint (768px)
@@ -90,10 +90,10 @@ public/
 - New song IDs use `Date.now()` as integer primary key
 
 ### Web Workers
-No standalone worker files — both are inline Blob Workers created at runtime:
+No standalone worker files — all are inline Blob Workers created at runtime:
 - **Sync Worker** (80ms tick) in `useSyncEngine.ts` — drives lyric line computation
-- **Timer Worker** (50ms tick) in `useManualTimer.ts` — drives manual timer mode
-- Both cleaned up via `URL.revokeObjectURL` + `worker.terminate()` on unmount
+- **Pitch Workers** in `lib/pitch-shift.ts` — one per channel; source built from `pitchShiftChannel.toString()`, so that function must stay self-contained
+- Cleaned up via `URL.revokeObjectURL` + `worker.terminate()`
 
 ### Audio Sources
 - **YouTube:** IFrame API loaded lazily (singleton pattern), managed by `useYouTubePlayer`

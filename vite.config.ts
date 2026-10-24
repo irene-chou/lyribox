@@ -69,6 +69,15 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
+      rollupOptions: {
+        output: {
+          // Long-lived vendor chunks so app changes don't invalidate their cache
+          manualChunks(id) {
+            if (/node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react'
+            if (/node_modules[\\/](dexie|dexie-react-hooks)[\\/]/.test(id)) return 'dexie'
+          },
+        },
+      },
     },
   }
 })
