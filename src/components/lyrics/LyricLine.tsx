@@ -64,7 +64,7 @@ export const LyricLine = memo(
         color,
         fontStyle: isInterlude ? ('italic' as const) : ('normal' as const),
         letterSpacing: isInterlude ? '0.05em' : 'normal',
-        transition: 'all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        transition: 'font-size 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), color 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), font-weight 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)',
         cursor: onClick ? 'pointer' : ('default' as const),
       }),
       [fontSize, fontWeight, color, isInterlude, onClick],

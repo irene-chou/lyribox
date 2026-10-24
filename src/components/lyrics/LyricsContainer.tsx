@@ -81,7 +81,7 @@ export function LyricsContainer({ onSeekToLyric, isMobile }: LyricsContainerProp
 
   const containerStyle = useMemo(() => ({ background: lyricsBgColor }), [lyricsBgColor])
   const scrollStyle = useMemo(
-    () => ({ padding: isMobile ? '20vh 16px' : '30vh 48px', scrollBehavior: 'smooth' as const }),
+    () => ({ padding: isMobile ? '20vh 16px' : '30vh 48px' }),
     [isMobile],
   )
   const gapStyle = useMemo(() => ({ gap: `${lyricsGap}px` }), [lyricsGap])
