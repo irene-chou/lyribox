@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef, useCallback } from 'react'
-import { X, FolderPlus } from 'lucide-react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import { X, FolderPlus, Plus } from 'lucide-react'
 import {
   Drawer,
   DrawerContent,
@@ -14,37 +14,49 @@ import { FolderSection } from './FolderSection'
 import {
   useSongs,
   useFolders,
-  useStoredAudioSongIds,
+  saveSongToDB,
   deleteSongFromDB,
   createFolder,
   updateFolder,
   deleteFolder,
+  restoreFolder,
   moveSongToFolder,
 } from '@/hooks/useSongLibrary'
 import { useSongStore } from '@/stores/useSongStore'
-import { usePlaybackStore } from '@/stores/usePlaybackStore'
-import { useUISettingsStore } from '@/stores/useUISettingsStore'
-import { saveAudioFile } from '@/lib/audio-file-store'
+import { confirmDialog, promptDialog } from '@/stores/useDialogStore'
+import { toast } from '@/stores/useToastStore'
+import { getAudioFile, restoreAudioFile } from '@/lib/audio-file-store'
+import { selectSong } from '@/lib/song-selection'
+import { ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 import type { Song, Folder } from '@/types'
 
 interface SongDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onNewSong: () => void
   isMobile?: boolean
 }
 
-export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
+export function SongDrawer({ open, onOpenChange, onNewSong, isMobile }: SongDrawerProps) {
   const [search, setSearch] = useState('')
   const songs = useSongs()
   const folders = useFolders()
-  const storedAudioIds = useStoredAudioSongIds()
-  const { currentSongId, loadSong } = useSongStore()
-  const localFileInputRef = useRef<HTMLInputElement>(null)
-  const pendingSongRef = useRef<Song | null>(null)
+  const currentSongId = useSongStore((s) => s.currentSongId)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   // Uncategorized section drag-over state
   const [unfolderDragOver, setUnfolderDragOver] = useState(false)
   const unfolderDragCounterRef = useRef(0)
+
+  // Focus the search box whenever the drawer opens (⌘K flow)
+  useEffect(() => {
+    if (!open) return
+    const t = setTimeout(() => {
+      searchRef.current?.focus()
+      searchRef.current?.select()
+    }, 60)
+    return () => clearTimeout(t)
+  }, [open])
 
   const filteredSongs = useMemo(() => {
     if (!songs) return []
@@ -71,39 +83,31 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
   }, [songs, folders])
 
   const handleSelect = useCallback((song: Song) => {
-    loadSong(song)
-    // Stored audio is restored automatically (useLocalAudioRestore); only ask
-    // for a file when nothing is stored for this song.
-    if (song.audioSource === 'local' && !storedAudioIds?.has(song.id)) {
-      pendingSongRef.current = song
-      localFileInputRef.current?.click()
-    }
+    void selectSong(song)
     onOpenChange(false)
-  }, [loadSong, onOpenChange, storedAudioIds])
+  }, [onOpenChange])
 
-  function handleLocalFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    const song = pendingSongRef.current
-    pendingSongRef.current = null
-    if (!file) return
-    const objectUrl = URL.createObjectURL(file)
-    usePlaybackStore.getState().setAudioFileObjectUrl(objectUrl)
-    if (song && file.name !== song.audioFileName) {
-      useSongStore.getState().setAudioFileName(file.name)
-    }
-    if (song && useUISettingsStore.getState().persistLocalAudio) {
-      void saveAudioFile(song.id, file)
-    }
-    e.target.value = ''
-  }
+  const handleSearchSubmit = useCallback(() => {
+    const first = filteredSongs[0]
+    if (first) handleSelect(first)
+  }, [filteredSongs, handleSelect])
 
   const handleDelete = useCallback(async (song: Song) => {
-    const confirmed = confirm(`確定要刪除「${song.name}」嗎？`)
-    if (!confirmed) return
+    // Snapshot the stored audio (if any) so the delete can be undone
+    const audioRecord = await getAudioFile(song.id)
     await deleteSongFromDB(song.id)
-    if (useSongStore.getState().currentSongId === song.id) {
-      useSongStore.getState().clearSong()
-    }
+    const wasCurrent = useSongStore.getState().currentSongId === song.id
+    if (wasCurrent) useSongStore.getState().clearSong()
+
+    toast(`已刪除「${song.name}」`, {
+      actionLabel: '復原',
+      onAction: async () => {
+        await saveSongToDB(song)
+        if (audioRecord) await restoreAudioFile(audioRecord)
+        if (wasCurrent) void selectSong(song)
+        toast.success(`已復原「${song.name}」`)
+      },
+    })
   }, [])
 
   const handleMove = useCallback(async (song: Song, folderId: number | null) => {
@@ -122,7 +126,12 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
   }, [])
 
   const handleCreateFolder = useCallback(async () => {
-    const name = prompt('資料夾名稱：')
+    const name = await promptDialog({
+      title: '新增資料夾',
+      label: '資料夾名稱',
+      placeholder: '例如：練習曲、直播歌單',
+      confirmLabel: '建立',
+    })
     if (!name?.trim()) return
     await createFolder(name.trim())
   }, [])
@@ -132,14 +141,27 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
   }, [])
 
   const handleDeleteFolder = useCallback(async (folder: Folder) => {
-    const confirmed = confirm(`確定要刪除資料夾「${folder.name}」嗎？\n資料夾內的歌曲將移至未分類。`)
+    const count = folderSongs.get(folder.id)?.length ?? 0
+    const confirmed = await confirmDialog({
+      title: `刪除資料夾「${folder.name}」？`,
+      description: count > 0 ? `資料夾內的 ${count} 首歌會移至未分類，不會被刪除。` : '這個資料夾是空的。',
+      confirmLabel: '刪除',
+      destructive: true,
+    })
     if (!confirmed) return
-    await deleteFolder(folder.id)
+    const movedSongIds = await deleteFolder(folder.id)
     const state = useSongStore.getState()
-    if (state.folderId === folder.id) {
-      state.setFolderId(null)
-    }
-  }, [])
+    if (state.folderId === folder.id) state.setFolderId(null)
+
+    toast(`已刪除資料夾「${folder.name}」`, {
+      actionLabel: '復原',
+      onAction: async () => {
+        await restoreFolder(folder, movedSongIds)
+        const s = useSongStore.getState()
+        if (s.currentSongId !== null && movedSongIds.includes(s.currentSongId)) s.setFolderId(folder.id)
+      },
+    })
+  }, [folderSongs])
 
   const folderList = folders ?? []
   const isLoading = !songs
@@ -147,55 +169,60 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
 
   return (
     <Drawer direction="right" open={open} onOpenChange={onOpenChange}>
-      <input
-        ref={localFileInputRef}
-        type="file"
-        accept="audio/*"
-        onChange={handleLocalFileSelect}
-        style={{ display: 'none' }}
-      />
       <DrawerContent
         className="h-full bg-lb-bg-secondary border-l border-lb-border"
-        style={{ width: isMobile ? '100vw' : '380px' }}
+        style={{ width: isMobile ? '100vw' : '400px' }}
       >
         {/* Header */}
         <DrawerHeader
           className="flex-row items-center justify-between shrink-0 border-b border-lb-border"
-          style={{ padding: isMobile ? '16px' : '20px 24px' }}
+          style={{ padding: isMobile ? '12px 16px' : '16px 20px' }}
         >
           <div>
-            <DrawerTitle
-              className="text-lb-text-primary"
-              style={{ fontSize: '14px', fontWeight: 600 }}
-            >
+            <DrawerTitle className="text-lb-text-primary" style={{ fontSize: '14px', fontWeight: 600 }}>
               歌曲庫
             </DrawerTitle>
             <DrawerDescription className="sr-only">管理你的歌曲</DrawerDescription>
           </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="flex items-center justify-center transition-colors cursor-pointer text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-input"
-            style={{ width: '28px', height: '28px', padding: 0, border: 'none', borderRadius: '6px', background: 'none' }}
-            title="關閉"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center" style={{ gap: '6px' }}>
+            <button
+              onClick={() => {
+                onOpenChange(false)
+                onNewSong()
+              }}
+              className="flex items-center bg-lb-accent text-white hover:bg-[#6b59de] transition-colors cursor-pointer"
+              style={{ height: '30px', padding: '0 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, gap: '6px', border: 'none', fontFamily: 'var(--font-sans)' }}
+            >
+              <Plus size={14} />
+              新增歌曲
+            </button>
+            <button onClick={() => onOpenChange(false)} className={ICON_BTN_CLASS} style={ICON_BTN_STYLE} title="關閉" aria-label="關閉歌曲庫 (Esc)">
+              <X size={16} />
+            </button>
+          </div>
         </DrawerHeader>
 
         {/* Body */}
         <div
           className="flex flex-col flex-1 overflow-hidden"
-          style={{ padding: isMobile ? '12px 16px' : '16px 24px', gap: '12px' }}
+          style={{ padding: isMobile ? '12px 16px' : '16px 20px', gap: '12px' }}
         >
           <div className="flex items-center" style={{ gap: '8px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <SongSearchInput value={search} onChange={setSearch} />
+              <SongSearchInput
+                ref={searchRef}
+                value={search}
+                onChange={setSearch}
+                onSubmit={handleSearchSubmit}
+                hint={isSearching && filteredSongs.length > 0 ? '↵ 載入第一首' : undefined}
+              />
             </div>
             <button
               onClick={handleCreateFolder}
-              className="flex items-center justify-center transition-colors cursor-pointer text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-input"
-              style={{ width: '32px', height: '32px', padding: 0, border: 'none', borderRadius: '6px', background: 'none', flexShrink: 0 }}
+              className={ICON_BTN_CLASS}
+              style={{ ...ICON_BTN_STYLE, width: '32px', height: '32px' }}
               title="新增資料夾"
+              aria-label="新增資料夾"
             >
               <FolderPlus size={16} />
             </button>
@@ -214,22 +241,29 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
                   找不到符合的歌曲
                 </p>
               ) : (
-                filteredSongs.map((song) => (
-                  <SongListItem
-                    key={song.id}
-                    song={song}
-                    isActive={currentSongId === song.id}
-                    folders={folderList}
-                    onSelect={handleSelect}
-                    onDelete={handleDelete}
-                    onMove={handleMove}
-                  />
-                ))
+                <>
+                  <div
+                    className="text-lb-text-secondary"
+                    style={{ fontSize: '11px', fontWeight: 600, padding: '8px 8px 4px', letterSpacing: '0.05em' }}
+                  >
+                    搜尋結果 · {filteredSongs.length}
+                  </div>
+                  {filteredSongs.map((song) => (
+                    <SongListItem
+                      key={song.id}
+                      song={song}
+                      isActive={currentSongId === song.id}
+                      folders={folderList}
+                      onSelect={handleSelect}
+                      onDelete={handleDelete}
+                      onMove={handleMove}
+                    />
+                  ))}
+                </>
               )
             ) : (
               // Grouped view
               <>
-                {/* Folders */}
                 {folderList.map((folder) => (
                   <FolderSection
                     key={folder.id}
@@ -272,11 +306,9 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
                       outline: unfolderDragOver ? '2px dashed var(--lb-accent)' : '2px solid transparent',
                       background: unfolderDragOver ? 'rgba(124, 106, 239, 0.08)' : 'transparent',
                       transition: 'outline 0.1s, background 0.1s',
-                      // Ensure minimum tappable height even when empty
                       minHeight: unfolderSongs.length === 0 ? '40px' : undefined,
                     }}
                   >
-                    {/* Section label */}
                     <div
                       className="text-lb-text-secondary"
                       style={{ fontSize: '11px', fontWeight: 600, padding: '8px 8px 4px', letterSpacing: '0.05em' }}
@@ -296,7 +328,6 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
                       />
                     ))}
 
-                    {/* Drop hint shown only while dragging over empty section */}
                     {unfolderSongs.length === 0 && unfolderDragOver && (
                       <p className="text-lb-text-secondary" style={{ fontSize: '11px', padding: '2px 12px 8px', fontStyle: 'italic' }}>
                         放開以移出資料夾
@@ -305,7 +336,6 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
                   </div>
                 )}
 
-                {/* When no folders: plain uncategorized list */}
                 {!hasFolders && unfolderSongs.map((song) => (
                   <SongListItem
                     key={song.id}
@@ -318,7 +348,6 @@ export function SongDrawer({ open, onOpenChange, isMobile }: SongDrawerProps) {
                   />
                 ))}
 
-                {/* Empty state */}
                 {folderList.length === 0 && unfolderSongs.length === 0 && (
                   <p className="text-lb-text-secondary" style={{ fontSize: '12px', textAlign: 'center', padding: '24px 0' }}>
                     尚無歌曲

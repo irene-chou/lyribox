@@ -127,6 +127,7 @@
   let visibleAfter = 1;
   let activeColor = '#ffffff';
   let otherColor = '#9090a8';
+  let passedColor = '#5a5a70';
   let lyricsBgColor = 'transparent';
   let songTitle = '';
   let syncChannel = null;
@@ -192,6 +193,7 @@
             visibleAfter = data.visibleAfter ?? 1;
             activeColor = data.activeColor || '#ffffff';
             otherColor = data.otherColor || '#9090a8';
+            passedColor = data.passedColor || '#5a5a70';
             lyricsBgColor = data.lyricsBgColor || 'transparent';
             songTitle = data.songTitle || '';
             renderLyrics();
@@ -221,6 +223,7 @@
           case 'LYRIC_COLORS':
             activeColor = data.activeColor || '#ffffff';
             otherColor = data.otherColor || '#9090a8';
+            passedColor = data.passedColor || '#5a5a70';
             lyricsBgColor = data.lyricsBgColor || 'transparent';
             updateActiveLine();
             applyColors();
@@ -304,7 +307,7 @@
       } else {
         line.classList.add('next', 'visible');
         line.style.fontSize = otherFontSize + 'px';
-        line.style.color = otherColor;
+        line.style.color = i < currentLineIndex ? passedColor : otherColor;
       }
     });
   }

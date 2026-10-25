@@ -48,6 +48,8 @@ export interface UISettings {
   visibleAfter: number
   activeColor: string
   otherColor: string
+  /** Color for lines that have already been sung. */
+  passedColor: string
   lyricsBgColor: string
   sidebarWidth: number
 }
@@ -74,7 +76,7 @@ export type SyncMessage =
   | { type: 'OFFSET'; data: { offset: number } }
   | { type: 'FONT_SIZE'; data: { activeFontSize: number; otherFontSize: number } }
   | { type: 'TITLE_FONT_SIZE'; data: { titleFontSize: number; showTitle: boolean } }
-  | { type: 'LYRIC_COLORS'; data: { activeColor: string; otherColor: string; lyricsBgColor: string } }
+  | { type: 'LYRIC_COLORS'; data: { activeColor: string; otherColor: string; passedColor: string; lyricsBgColor: string } }
   | { type: 'LYRICS_GAP'; data: { lyricsGap: number } }
   | { type: 'VISIBLE_RANGE'; data: { visibleBefore: number; visibleAfter: number } }
   | { type: 'FULL_STATE'; data: Record<string, unknown> }

@@ -1,8 +1,8 @@
 import { RotateCcw } from 'lucide-react'
 import { useSongStore } from '@/stores/useSongStore'
-import { useSyncStore } from '@/stores/useSyncStore'
-import { debouncedSaveSong } from '@/hooks/useSongLibrary'
-import { CONTROL_BTN_CLASS, OFFSET_BTN_STYLE } from '@/lib/constants'
+import { adjustOffset, resetOffset } from '@/lib/playback-actions'
+import { shortcutHint } from '@/lib/shortcuts'
+import { CONTROL_BTN_CLASS, OFFSET_BTN_STYLE, ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 
 export function OffsetControls() {
   const currentSongId = useSongStore((s) => s.currentSongId)
@@ -10,22 +10,9 @@ export function OffsetControls() {
 
   if (!currentSongId) return null
 
-  function adjustOffset(delta: number) {
-    const newOffset = Math.round((offset + delta) * 10) / 10
-    useSongStore.getState().setOffset(newOffset)
-    useSyncStore.getState().setCurrentLineIndex(-1)
-    debouncedSaveSong()
-  }
-
-  function resetOffset() {
-    useSongStore.getState().setOffset(0)
-    useSyncStore.getState().setCurrentLineIndex(-1)
-    debouncedSaveSong()
-  }
-
   return (
     <div style={{ marginTop: '4px' }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: '8px' }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: '6px' }}>
         <div
           className="text-lb-text-dim"
           style={{
@@ -37,25 +24,25 @@ export function OffsetControls() {
         >
           歌詞偏移 (Offset)
         </div>
-        <button
-          className="flex text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-input transition-colors cursor-pointer"
-          onClick={resetOffset}
-          title="重置偏移"
-          style={{
-            padding: '4px',
-            borderRadius: '4px',
-            background: 'none',
-            borderStyle: 'none',
-          }}
-        >
+        <button className={ICON_BTN_CLASS} onClick={resetOffset} title="重置偏移" style={ICON_BTN_STYLE}>
           <RotateCcw size={14} />
         </button>
       </div>
       <div className="flex items-center justify-center" style={{ gap: '6px' }}>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustOffset(-0.5)} style={OFFSET_BTN_STYLE}>
+        <button
+          className={CONTROL_BTN_CLASS}
+          onClick={() => adjustOffset(-0.5)}
+          style={OFFSET_BTN_STYLE}
+          title={`偏移 -0.5s ${shortcutHint('offset-back-large')}`}
+        >
           -0.5s
         </button>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustOffset(-0.1)} style={OFFSET_BTN_STYLE}>
+        <button
+          className={CONTROL_BTN_CLASS}
+          onClick={() => adjustOffset(-0.1)}
+          style={OFFSET_BTN_STYLE}
+          title={`偏移 -0.1s ${shortcutHint('offset-back')}`}
+        >
           -0.1s
         </button>
         <span
@@ -71,10 +58,20 @@ export function OffsetControls() {
           {offset >= 0 ? '+' : ''}
           {offset.toFixed(1)}s
         </span>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustOffset(0.1)} style={OFFSET_BTN_STYLE}>
+        <button
+          className={CONTROL_BTN_CLASS}
+          onClick={() => adjustOffset(0.1)}
+          style={OFFSET_BTN_STYLE}
+          title={`偏移 +0.1s ${shortcutHint('offset-forward')}`}
+        >
           +0.1s
         </button>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustOffset(0.5)} style={OFFSET_BTN_STYLE}>
+        <button
+          className={CONTROL_BTN_CLASS}
+          onClick={() => adjustOffset(0.5)}
+          style={OFFSET_BTN_STYLE}
+          title={`偏移 +0.5s ${shortcutHint('offset-forward-large')}`}
+        >
           +0.5s
         </button>
       </div>

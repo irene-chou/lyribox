@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
+import { toast } from '@/stores/useToastStore'
 
 let apiLoaded = false
 let apiLoading = false
@@ -117,7 +118,7 @@ export function useYouTubePlayer() {
             const code = event.data
             // Errors 101, 150, 153 = embed not allowed
             if (code === 101 || code === 150 || code === 153) {
-              alert('此 YouTube 影片不允許嵌入播放，請更換影片或改用本地音檔。')
+              toast.error('此 YouTube 影片不允許嵌入播放，請更換影片或改用本地音檔。')
             }
             // Destroy the player to free resources
             if (playerRef.current) {

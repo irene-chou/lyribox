@@ -1,28 +1,27 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { Play, Pause } from 'lucide-react'
+import { FileAudio, Timer } from 'lucide-react'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { useLocalAudioRestore } from '@/hooks/useLocalAudioRestore'
 import { saveAudioFile } from '@/lib/audio-file-store'
 import { YouTubePlayer } from './YouTubePlayer'
-import { ManualTimerPanel } from './ManualTimerPanel'
-import { PlaybackInfo } from './PlaybackInfo'
-import { VolumeControl } from './VolumeControl'
 import type { usePlaybackEngine } from '@/hooks/usePlaybackEngine'
 
 interface AudioPlayerProps {
   engine: ReturnType<typeof usePlaybackEngine>
-  onSeek: (time: number) => void
 }
 
-export function AudioPlayer({ engine, onSeek }: AudioPlayerProps) {
+/**
+ * Audio-source panel in the sidebar: the YouTube iframe, the local file
+ * picker, or a manual-timer hint. Transport controls live in `TransportBar`.
+ */
+export function AudioPlayer({ engine }: AudioPlayerProps) {
   const audioSource = useSongStore((s) => s.audioSource)
   const audioFileName = useSongStore((s) => s.audioFileName)
   const youtubeId = useSongStore((s) => s.youtubeId)
   const lyrics = useSongStore((s) => s.lyrics)
   const audioFileObjectUrl = usePlaybackStore((s) => s.audioFileObjectUrl)
-  const status = usePlaybackStore((s) => s.status)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Restore a stored local file for the current song, if any
@@ -50,104 +49,92 @@ export function AudioPlayer({ engine, onSeek }: AudioPlayerProps) {
     e.target.value = ''
   }, [audioFileName])
 
-  const isPlaying = status === 'PLAYING'
   const hasLyrics = lyrics.length > 0
-
-  // Determine if there's an actual audio source available
   const hasAudio =
     (audioSource === 'youtube' && !!youtubeId) ||
     (audioSource === 'local' && !!audioFileObjectUrl)
 
-  // Show manual timer when there are lyrics but no audio
-  const showManualTimer = hasLyrics && !hasAudio
-
-  // Local audio — no file loaded yet: show prompt without player container
-  if (audioSource === 'local' && !audioFileObjectUrl && !showManualTimer) {
-    return (
-      <div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="audio/*"
-          onChange={handleFileSelect}
-          style={{ display: 'none' }}
-        />
-        <div className="flex flex-col" style={{ gap: '8px' }}>
-          <p
-            className="text-lb-text-secondary"
-            style={{ fontSize: '12px' }}
-          >
-            {audioFileName
-              ? `上次使用：${audioFileName}`
-              : '請選擇音檔以開始播放'}
-          </p>
-          <button
-            className="border border-lb-accent bg-lb-accent text-white hover:bg-[#6b59de] hover:shadow-[0_4px_16px_var(--lb-accent-glow)] transition-all cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              padding: '8px 14px',
-              fontSize: '12px',
-              fontWeight: 600,
-              borderRadius: '6px',
-              fontFamily: 'var(--font-sans)',
-              alignSelf: 'flex-start',
-            }}
-          >
-            選擇音檔
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Manual timer fallback — lyrics loaded but no audio
-  if (showManualTimer) {
-    return (
-      <div
-        className="flex flex-col bg-lb-bg-input rounded-lg"
-        style={{ gap: '6px', padding: '10px 12px' }}
-      >
-        <ManualTimerPanel engine={engine} />
-      </div>
-    )
-  }
-
-  // YouTube embed mode — iframe only, no extra container
   if (audioSource === 'youtube') {
-    return <YouTubePlayer engine={engine} />
+    if (youtubeId) return <YouTubePlayer engine={engine} />
+    return (
+      <Hint icon={<Timer size={14} />}>
+        {hasLyrics ? '未設定 YouTube 影片，使用手動計時器同步歌詞。' : '未設定 YouTube 影片。'}
+      </Hint>
+    )
   }
 
-  // Local audio — file loaded
+  // Local audio
+  const fileInput = (
+    <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+  )
+
+  if (!hasAudio) {
+    return (
+      <div className="flex flex-col" style={{ gap: '8px' }}>
+        {fileInput}
+        <Hint icon={<Timer size={14} />}>
+          {audioFileName ? `上次使用：${audioFileName}` : '尚未選擇音檔'}
+          {hasLyrics && '，目前以手動計時器同步。'}
+        </Hint>
+        <button
+          className="bg-lb-accent text-white hover:bg-[#6b59de] hover:shadow-[0_4px_16px_var(--lb-accent-glow)] transition-all cursor-pointer"
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            height: '32px',
+            padding: '0 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            borderRadius: '6px',
+            border: 'none',
+            fontFamily: 'var(--font-sans)',
+            alignSelf: 'flex-start',
+          }}
+        >
+          選擇音檔
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div
-      className="flex flex-col bg-lb-bg-input rounded-lg"
-      style={{ gap: '6px', padding: '10px 12px' }}
+      className="flex items-center bg-lb-bg-input rounded-lg"
+      style={{ gap: '8px', padding: '8px 10px' }}
     >
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*"
-        onChange={handleFileSelect}
-        style={{ display: 'none' }}
-      />
-      <PlaybackInfo onSeek={onSeek} />
-      <div className="flex items-center justify-between" style={{ gap: '6px' }}>
-        <button
-          className="flex items-center justify-center border border-lb-accent bg-lb-accent text-white hover:bg-[#6b59de] hover:shadow-[0_4px_16px_var(--lb-accent-glow)] transition-all cursor-pointer"
-          onClick={() => engine.togglePlay()}
-          style={{
-            width: '26px',
-            height: '26px',
-            padding: 0,
-            borderRadius: '50%',
-            flexShrink: 0,
-          }}
-          title={isPlaying ? '暫停' : '播放'}
-        >
-          {isPlaying ? <Pause size={12} /> : <Play size={12} style={{ marginLeft: '1px' }} />}
-        </button>
-        <VolumeControl />
-      </div>
+      {fileInput}
+      <FileAudio size={14} className="shrink-0 text-lb-text-secondary" />
+      <span
+        className="flex-1 min-w-0 truncate text-lb-text-primary"
+        style={{ fontSize: '12px' }}
+        title={audioFileName ?? undefined}
+      >
+        {audioFileName ?? '本地音檔'}
+      </span>
+      <button
+        className="shrink-0 text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-card transition-colors cursor-pointer"
+        onClick={() => fileInputRef.current?.click()}
+        style={{
+          height: '26px',
+          padding: '0 8px',
+          fontSize: '11px',
+          fontWeight: 600,
+          borderRadius: '4px',
+          border: '1px solid var(--lb-border)',
+          background: 'none',
+          fontFamily: 'var(--font-sans)',
+        }}
+      >
+        更換
+      </button>
     </div>
+  )
+}
+
+function Hint({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <p className="flex items-start text-lb-text-secondary" style={{ gap: '6px', fontSize: '12px', lineHeight: 1.5 }}>
+      <span className="shrink-0" style={{ marginTop: '2px' }}>{icon}</span>
+      <span>{children}</span>
+    </p>
   )
 }

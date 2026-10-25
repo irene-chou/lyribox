@@ -17,8 +17,8 @@ export function VisibleRangeControl({
   const btnClass = 'flex items-center justify-center border border-lb-border bg-lb-bg-input text-lb-text-primary hover:bg-lb-bg-card hover:border-lb-text-dim transition-colors cursor-pointer'
 
   const btnStyle: React.CSSProperties = {
-    width: '22px',
-    height: '22px',
+    width: '26px',
+    height: '26px',
     padding: 0,
     borderRadius: '4px',
     lineHeight: 1,
@@ -27,7 +27,7 @@ export function VisibleRangeControl({
   const labelStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    height: '22px',
+    height: '26px',
     fontSize: '11px',
     color: 'var(--lb-text-secondary)',
     lineHeight: 1,
@@ -50,6 +50,7 @@ export function VisibleRangeControl({
           className={btnClass}
           onClick={() => onBeforeChange(Math.max(0, before - 1))}
           style={btnStyle}
+          aria-label="前面少顯示一行"
         >
           <Minus size={12} />
         </button>
@@ -58,6 +59,7 @@ export function VisibleRangeControl({
           className={btnClass}
           onClick={() => onBeforeChange(Math.min(5, before + 1))}
           style={btnStyle}
+          aria-label="前面多顯示一行"
         >
           <Plus size={12} />
         </button>
@@ -66,6 +68,7 @@ export function VisibleRangeControl({
           className={btnClass}
           onClick={() => onAfterChange(Math.max(0, after - 1))}
           style={btnStyle}
+          aria-label="後面少顯示一行"
         >
           <Minus size={12} />
         </button>
@@ -74,6 +77,7 @@ export function VisibleRangeControl({
           className={btnClass}
           onClick={() => onAfterChange(Math.min(5, after + 1))}
           style={btnStyle}
+          aria-label="後面多顯示一行"
         >
           <Plus size={12} />
         </button>
@@ -112,7 +116,7 @@ function EditableValue({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '22px',
+    height: '26px',
     fontFamily: 'var(--font-mono)',
     fontSize: '12px',
     lineHeight: 1,

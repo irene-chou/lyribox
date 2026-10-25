@@ -62,6 +62,7 @@ export function useOBSSync() {
       offset: song.offset,
       activeColor: ui.activeColor,
       otherColor: ui.otherColor,
+      passedColor: ui.passedColor,
       lyricsBgColor: ui.lyricsBgColor,
       songTitle: song.currentSongTitle,
     })
