@@ -20,9 +20,7 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
   const [copied, setCopied] = useState(false)
 
   function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    track('theme_toggle', { to: next })
-    setTheme(next)
+    setTheme(theme === 'dark' ? 'light' : 'dark')
   }
 
   const copyOBSUrl = useCallback(async () => {

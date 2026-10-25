@@ -7,24 +7,16 @@
  * purpose to see what people sing); never lyrics text or local file names.
  */
 
-export type AnalyticsEvent =
-  | 'song_create'
-  | 'song_edit'
-  | 'song_load'
-  | 'play'
-  | 'pitch_change'
-  | 'lyrics_search'
-  | 'obs_url_copy'
-  | 'songs_export'
-  | 'songs_import'
-  | 'theme_toggle'
-  | 'shortcuts_open'
+export type AnalyticsEvent = 'song_create' | 'song_edit' | 'song_load' | 'obs_url_copy' | 'shortcuts_open'
+
+/** The Umami website is shared with other projects, so every event name is prefixed. */
+const EVENT_PREFIX = 'lyribox_'
 
 type Primitive = string | number | boolean
 
 export function track(event: AnalyticsEvent, data?: Record<string, Primitive>): void {
   try {
-    window.umami?.track(event, data)
+    window.umami?.track(EVENT_PREFIX + event, data)
   } catch {
     // analytics must never break the app
   }

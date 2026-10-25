@@ -9,14 +9,12 @@ import {
 import { exportSongs, importSongs } from '@/hooks/useSongLibrary'
 import { toast } from '@/stores/useToastStore'
 import { ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
-import { track } from '@/lib/analytics'
 
 export function SongDrawerMenu() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleExport() {
     await exportSongs()
-    track('songs_export')
     toast.success('已匯出歌曲庫')
   }
 
@@ -25,7 +23,6 @@ export function SongDrawerMenu() {
     if (!file) return
     try {
       const count = await importSongs(file)
-      track('songs_import', { count })
       toast.success(`成功匯入 ${count} 首歌曲`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : '檔案格式無效'
