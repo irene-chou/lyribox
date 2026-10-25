@@ -6,6 +6,11 @@ import { DEFAULT_UI_SETTINGS } from '@/lib/constants'
 interface UISettingsState extends UISettings {
   /** Whether the "顯示設定" panel in the sidebar is expanded (not part of resetAll). */
   displaySettingsOpen: boolean
+  /**
+   * Whether this browser has opted into OBS sync (set when the OBS URL is copied).
+   * Until then no PieSocket connection is opened at all. Not part of resetAll.
+   */
+  obsSyncEnabled: boolean
 
   setActiveFontSize: (size: number) => void
   setOtherFontSize: (size: number) => void
@@ -21,6 +26,7 @@ interface UISettingsState extends UISettings {
   setSidebarWidth: (width: number) => void
   setPersistLocalAudio: (persist: boolean) => void
   setDisplaySettingsOpen: (open: boolean) => void
+  setObsSyncEnabled: (enabled: boolean) => void
   resetAll: () => void
 }
 
@@ -29,6 +35,7 @@ export const useUISettingsStore = create<UISettingsState>()(
     (set) => ({
       ...DEFAULT_UI_SETTINGS,
       displaySettingsOpen: false,
+      obsSyncEnabled: false,
 
       setActiveFontSize: (size: number) => set({ activeFontSize: size }),
       setOtherFontSize: (size: number) => set({ otherFontSize: size }),
@@ -44,6 +51,7 @@ export const useUISettingsStore = create<UISettingsState>()(
       setSidebarWidth: (width: number) => set({ sidebarWidth: width }),
       setPersistLocalAudio: (persist: boolean) => set({ persistLocalAudio: persist }),
       setDisplaySettingsOpen: (open: boolean) => set({ displaySettingsOpen: open }),
+      setObsSyncEnabled: (enabled: boolean) => set({ obsSyncEnabled: enabled }),
       resetAll: () => set({ ...DEFAULT_UI_SETTINGS }),
     }),
     {

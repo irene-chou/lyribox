@@ -16,6 +16,20 @@ export function getChannelName(): string {
   return `lyribox-${getSessionId()}`
 }
 
+/**
+ * Run `onReopen` each time the channel's WebSocket reconnects (not on the initial open,
+ * which has already happened once `subscribe()` resolves). piesocket-js 5.x never emits
+ * an 'open' event, but it re-reads `channel.onOpen` on every reconnect, so an instance
+ * override is the only reliable hook. Shared by the app and `public/obs.html`.
+ */
+export function observeReconnects(channel: PieSocketChannel, onReopen: () => void): void {
+  const original = channel.onOpen.bind(channel)
+  channel.onOpen = (event: unknown) => {
+    original(event)
+    onReopen()
+  }
+}
+
 export function getOBSUrl(): string {
   const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/')
   return `${base}obs.html?s=${getSessionId()}`

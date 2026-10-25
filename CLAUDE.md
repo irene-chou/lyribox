@@ -113,8 +113,9 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 - PieSocket WebSocket for real-time sync to `public/obs.html` (standalone OBS browser source)
 - Channel: `lyribox-{sessionId}` where sessionId is stored in `localStorage['lb-session-id']`
 - `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
-- `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE`
-- OBS page auto-reconnects and re-requests state every 10s if no messages received
+- `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
+- **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
+- OBS page requests state once per (re)connect (plus bounded retries at 5s/20s if nothing arrived) — no polling while idle. piesocket-js 5.x emits no 'open' event, so reconnects are observed by overriding `channel.onOpen` (`lib/piesocket.ts` `observeReconnects`, same trick inline in `obs.html`)
 
 ### Keyboard Shortcuts
 Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `ShortcutsDialog` (`?`) lists them. Button `title`s include the hint via `shortcutHint(id)`.

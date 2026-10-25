@@ -5,6 +5,7 @@ import { getOBSUrl } from '@/lib/piesocket'
 import { promptDialog } from '@/stores/useDialogStore'
 import { toast } from '@/stores/useToastStore'
 import { shortcutHint } from '@/lib/shortcuts'
+import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { track } from '@/lib/analytics'
 
 interface HeaderProps {
@@ -25,6 +26,8 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
 
   const copyOBSUrl = useCallback(async () => {
     const url = getOBSUrl()
+    // Opting in here is what makes useOBSSync open the PieSocket connection
+    useUISettingsStore.getState().setObsSyncEnabled(true)
     track('obs_url_copy')
     try {
       await navigator.clipboard.writeText(url)
