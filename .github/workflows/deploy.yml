@@ -32,6 +32,7 @@ jobs:
         env:
           VITE_PIESOCKET_API_KEY: ${{ secrets.VITE_PIESOCKET_API_KEY }}
           VITE_PIESOCKET_CLUSTER_ID: ${{ secrets.VITE_PIESOCKET_CLUSTER_ID }}
+          VITE_CF_BEACON_TOKEN: ${{ vars.VITE_CF_BEACON_TOKEN }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
