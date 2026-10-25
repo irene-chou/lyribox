@@ -1,6 +1,8 @@
 export interface LyricLine {
   time: number
   text: string
+  /** Translation / romanization lines that shared this timestamp in the LRC (newline-joined). */
+  subText?: string
 }
 
 export type AudioSource = 'youtube' | 'local'

@@ -71,6 +71,15 @@
     letter-spacing: 0.05em;
   }
 
+  .lyric-sub {
+    font-size: 0.6em;
+    font-weight: 400;
+    line-height: 1.4;
+    opacity: 0.75;
+    margin-top: 2px;
+    white-space: pre-line;
+  }
+
   .now-singing {
     display: none;
     flex-direction: column;
@@ -311,6 +320,12 @@
         div.appendChild(document.createTextNode('\u9593\u594F'));
       } else {
         div.appendChild(document.createTextNode(item.text));
+        if (item.subText) {
+          const sub = document.createElement('div');
+          sub.className = 'lyric-sub';
+          sub.textContent = item.subText;
+          div.appendChild(sub);
+        }
       }
 
       container.appendChild(div);

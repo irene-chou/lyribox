@@ -54,7 +54,7 @@ src/
   lib/
     db.ts                 # Dexie instance ('lyribox-db', songs table)
     song-service.ts       # CRUD, export/import, validation for songs
-    lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
+    lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization)
     format.ts             # formatTime(), extractVideoId()
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
