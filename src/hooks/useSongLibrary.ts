@@ -23,6 +23,17 @@ export function useFolders() {
   )
 }
 
+/** Ids of songs that have an audio file stored in the browser (keys only, no blobs). */
+export async function getStoredAudioSongIds(): Promise<Set<number>> {
+  const keys = await db.audioFiles.toCollection().primaryKeys()
+  return new Set(keys)
+}
+
+/** Live query of {@link getStoredAudioSongIds}. */
+export function useStoredAudioSongIds() {
+  return useLiveQuery(getStoredAudioSongIds)
+}
+
 // Re-export service functions for backward compatibility
 export {
   saveSongToDB,
@@ -33,5 +44,6 @@ export {
   createFolder,
   updateFolder,
   deleteFolder,
+  restoreFolder,
   moveSongToFolder,
 } from '@/lib/song-service'

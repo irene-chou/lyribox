@@ -1,11 +1,15 @@
-import { Pencil, X } from 'lucide-react'
+import { Pencil, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
+import { navigateSong } from '@/lib/song-selection'
+import { shortcutHint } from '@/lib/shortcuts'
+import { ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 import { AudioPlayer } from '../playback/AudioPlayer'
 import { OffsetControls } from '../playback/OffsetControls'
 import { PitchControls } from '../playback/PitchControls'
 import { DisplaySettings } from '../settings/DisplaySettings'
+import { SaveStatusIndicator } from './SaveStatusIndicator'
 import type { Song } from '@/types'
 import type { usePlaybackEngine } from '@/hooks/usePlaybackEngine'
 
@@ -15,6 +19,10 @@ interface ControlPanelProps {
   isMobile?: boolean
   onClose?: () => void
 }
+
+const navBtnClass =
+  'flex items-center justify-center shrink-0 border border-lb-border bg-lb-bg-input text-lb-text-primary hover:bg-lb-bg-card hover:border-lb-text-dim transition-colors cursor-pointer'
+const navBtnStyle: React.CSSProperties = { width: '28px', height: '28px', borderRadius: '6px', padding: 0 }
 
 export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlPanelProps) {
   const { currentSongId, currentSongTitle, currentSongCreatedAt, lrcText, offset, pitch, audioSource, youtubeId, audioFileName, folderId } = useSongStore(
@@ -51,10 +59,6 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
     onEditSong(song)
   }
 
-  function handleSeek(time: number) {
-    engine.seekTo(time)
-  }
-
   return (
     <aside
       className="flex flex-col overflow-y-auto bg-lb-bg-secondary border-r border-lb-border"
@@ -62,32 +66,17 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
         width: isMobile ? '100%' : sidebarWidth,
         height: isMobile ? '100%' : undefined,
         flexShrink: 0,
-        padding: isMobile ? '16px' : '24px',
-        gap: isMobile ? '16px' : '20px',
+        padding: isMobile ? '16px' : '20px',
+        gap: '16px',
       }}
     >
       {/* Mobile header with close button */}
       {isMobile && onClose && (
         <div className="flex items-center justify-between">
-          <h2
-            className="text-lb-text-primary"
-            style={{ fontSize: '14px', fontWeight: 600 }}
-          >
+          <h2 className="text-lb-text-primary" style={{ fontSize: '14px', fontWeight: 600 }}>
             控制面板
           </h2>
-          <button
-            onClick={onClose}
-            className="flex items-center justify-center transition-colors cursor-pointer text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-input"
-            style={{
-              width: '28px',
-              height: '28px',
-              padding: 0,
-              border: 'none',
-              borderRadius: '6px',
-              background: 'none',
-            }}
-            title="關閉"
-          >
+          <button onClick={onClose} className={ICON_BTN_CLASS} style={ICON_BTN_STYLE} title="關閉" aria-label="關閉控制面板">
             <X size={16} />
           </button>
         </div>
@@ -96,72 +85,84 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
       {/* 歌曲設定 */}
       <section
         className="flex flex-col border border-lb-border"
-        style={{
-          borderRadius: 'var(--lb-radius)',
-          padding: isMobile ? '12px' : '16px',
-          gap: '12px',
-        }}
+        style={{ borderRadius: 'var(--lb-radius)', padding: isMobile ? '12px' : '16px', gap: '12px' }}
       >
         <div className="flex items-center justify-between">
           <h2
             className="text-lb-text-dim"
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}
+            style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}
           >
             歌曲設定
           </h2>
           {currentSongId && (
-            <button
-              onClick={handleEdit}
-              className="flex items-center justify-center transition-colors cursor-pointer text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-input"
-              style={{
-                width: '24px',
-                height: '24px',
-                padding: 0,
-                border: 'none',
-                borderRadius: '4px',
-              }}
-              title="編輯歌曲"
-            >
+            <button onClick={handleEdit} className={ICON_BTN_CLASS} style={ICON_BTN_STYLE} title="編輯歌曲" aria-label="編輯歌曲">
               <Pencil size={14} />
             </button>
           )}
         </div>
+
         {currentSongId ? (
           <>
-            <div className="flex items-center gap-2">
-              <span
-                className="flex-1 min-w-0 truncate text-lb-text-primary"
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-              >
-                {currentSongTitle}
-              </span>
+            {/* Title + prev/next, save status below (aligned with title) */}
+            <div className="flex flex-col" style={{ gap: '2px' }}>
+              <div className="flex items-center" style={{ gap: '6px' }}>
+                <button
+                  className={navBtnClass}
+                  style={navBtnStyle}
+                  onClick={() => void navigateSong(-1)}
+                  title={`上一首 ${shortcutHint('prev-song')}`}
+                  aria-label="上一首"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span
+                  className="flex-1 min-w-0 truncate text-lb-text-primary"
+                  style={{ fontSize: '14px', fontWeight: 600, lineHeight: '28px' }}
+                  title={currentSongTitle}
+                >
+                  {currentSongTitle}
+                </span>
+                <button
+                  className={navBtnClass}
+                  style={navBtnStyle}
+                  onClick={() => void navigateSong(1)}
+                  title={`下一首 ${shortcutHint('next-song')}`}
+                  aria-label="下一首"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+              <div style={{ paddingLeft: '34px' }}>
+                <SaveStatusIndicator />
+              </div>
             </div>
 
-            {/* Audio Player */}
-            <AudioPlayer engine={engine} onSeek={handleSeek} />
+            <AudioPlayer engine={engine} />
             <OffsetControls />
             <PitchControls />
           </>
         ) : (
-          <p
-            className="text-lb-text-secondary"
-            style={{ fontSize: '13px' }}
-          >
+          <p className="text-lb-text-secondary" style={{ fontSize: '13px' }}>
             尚未載入歌曲
           </p>
         )}
       </section>
 
-      {/* 顯示設定 */}
+      {/* 顯示設定（可收合） */}
       <DisplaySettings />
+
+      {!isMobile && (
+        <p className="text-lb-text-secondary" style={{ marginTop: 'auto', fontSize: '11px', lineHeight: 1.6 }}>
+          按{' '}
+          <kbd
+            className="bg-lb-bg-input border border-lb-border text-lb-text-primary"
+            style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', padding: '1px 6px', borderRadius: '4px' }}
+          >
+            ?
+          </kbd>{' '}
+          查看所有快捷鍵
+        </p>
+      )}
     </aside>
   )
 }

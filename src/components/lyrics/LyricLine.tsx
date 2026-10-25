@@ -64,14 +64,26 @@ export const LyricLine = memo(
         color,
         fontStyle: isInterlude ? ('italic' as const) : ('normal' as const),
         letterSpacing: isInterlude ? '0.05em' : 'normal',
-        transition: 'all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)',
+        transition:
+          'font-size 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), color 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), font-weight 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), background-color 0.15s, padding-left 0.15s',
         cursor: onClick ? 'pointer' : ('default' as const),
+        // Negative margin so the hover background bleeds past the text without
+        // shifting layout
+        margin: '0 -12px',
+        padding: '2px 12px',
+        borderRadius: '8px',
       }),
       [fontSize, fontWeight, color, isInterlude, onClick],
     )
 
     return (
-      <div ref={ref} onClick={onClick} className="font-lyrics" style={style}>
+      <div
+        ref={ref}
+        onClick={onClick}
+        className={onClick ? 'font-lyrics lyric-line-clickable' : 'font-lyrics'}
+        style={style}
+        title={onClick ? '點擊跳到此句' : undefined}
+      >
         {isInterlude ? '♪' : line.text}
       </div>
     )

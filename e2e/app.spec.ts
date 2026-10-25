@@ -101,20 +101,69 @@ test.describe('Song modal', () => {
     await expect(page.getByRole('heading', { name: '新增歌曲' })).not.toBeVisible()
   })
 
-  test('shows alert when saving without LRC', async ({ page }) => {
+  test('shows inline error when saving without LRC', async ({ page }) => {
     await page.goto('/')
     await page.locator('button[title="新增歌曲"]').click()
 
     // Fill name but leave LRC empty
     await page.getByPlaceholder('輸入歌曲名稱').fill('Test Song')
-
-    // Listen for dialog (alert)
-    page.on('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('LRC')
-      await dialog.accept()
-    })
-
     await page.getByRole('button', { name: '儲存並載入' }).click()
+
+    // Modal stays open and shows the error next to the field (no native alert)
+    await expect(page.getByRole('alert')).toContainText('LRC')
+    await expect(page.getByRole('heading', { name: '新增歌曲' })).toBeVisible()
+  })
+})
+
+test.describe('Playback controls & shortcuts', () => {
+  async function createSong(page: import('@playwright/test').Page, name: string) {
+    await page.locator('button[title="新增歌曲"]').click()
+    await page.getByPlaceholder('輸入歌曲名稱').fill(name)
+    await page.locator('textarea').first().fill('[00:01.00]Line one\n[00:03.00]Line two\n[00:05.00]Line three')
+    await page.getByRole('button', { name: '儲存並載入' }).click()
+    await expect(page.getByRole('heading', { name: '新增歌曲' })).not.toBeVisible()
+  }
+
+  test('transport bar appears once a song is loaded and Space toggles play', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: '播放' })).toHaveCount(0)
+    await createSong(page, 'Transport Song')
+    await expect(page.getByRole('button', { name: '播放' })).toBeVisible()
+    await page.keyboard.press('Space')
+    await expect(page.getByRole('button', { name: '暫停' })).toBeVisible()
+    await page.keyboard.press('Space')
+    await expect(page.getByRole('button', { name: '播放' })).toBeVisible()
+  })
+
+  test('? opens the shortcuts dialog', async ({ page }) => {
+    await page.goto('/')
+    await page.keyboard.press('Shift+/')
+    await expect(page.getByRole('heading', { name: '鍵盤快捷鍵' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('heading', { name: '鍵盤快捷鍵' })).not.toBeVisible()
+  })
+
+  test('Cmd+K opens the drawer with search focused and Enter loads the first match', async ({ page }) => {
+    await page.goto('/')
+    await createSong(page, 'Quick Switch Song')
+    await page.keyboard.press('Meta+k')
+    await expect(page.getByLabel('搜尋歌曲')).toBeFocused()
+    await page.keyboard.type('quick')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('heading', { name: '歌曲庫' })).not.toBeVisible()
+    await expect(page.getByText('Line one')).toBeVisible()
+  })
+
+  test('deleting a song shows an undo toast instead of a native confirm', async ({ page }) => {
+    await page.goto('/')
+    await createSong(page, 'Undo Song')
+    await page.locator('button[title="歌曲庫"]').click()
+    const row = page.getByLabel('歌曲庫').getByText('Undo Song')
+    await row.hover()
+    await page.locator('button[title="刪除"]').first().click({ force: true })
+    await expect(page.getByRole('status').filter({ hasText: '已刪除「Undo Song」' })).toBeVisible()
+    await page.getByRole('button', { name: '復原' }).click()
+    await expect(page.getByLabel('歌曲庫').getByText('Undo Song')).toBeVisible()
   })
 })
 

@@ -99,10 +99,17 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
   }
 
   function commitHex(input: HTMLInputElement) {
-    const text = input.value
+    const text = input.value.trim()
+    if (text === '透明' || text.toLowerCase() === 'transparent') {
+      const next = { ...color, a: 0 }
+      setColor(next)
+      onChange(formatColor(next))
+      return
+    }
     if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{3}$/.test(text)) {
       const parsed = parseColor(text)
-      const next = { ...parsed, a: color.a }
+      // Typing a hex into a fully transparent colour means "make it visible"
+      const next = { ...parsed, a: color.a === 0 ? 1 : color.a }
       setColor(next)
       onChange(formatColor(next))
     }
@@ -110,7 +117,8 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
 
   // Swatch preview color
   const swatchCss = formatColor(color)
-  const hexDisplay = toHex(color)
+  const isTransparent = color.a === 0
+  const hexDisplay = isTransparent ? '透明' : toHex(color)
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative' }}>
@@ -131,19 +139,22 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
           type="text"
           defaultValue={hexDisplay}
           key={hexDisplay}
+          aria-label={`${label}顏色`}
+          title={isTransparent ? '目前為透明，輸入色碼即可設定顏色' : undefined}
           onBlur={(e) => commitHex(e.currentTarget)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commitHex(e.currentTarget)
           }}
           style={{
             width: '72px',
+            height: '26px',
             background: 'var(--lb-bg-input)',
             border: '1px solid var(--lb-border)',
             borderRadius: '4px',
-            padding: '3px 6px',
-            fontFamily: 'var(--font-mono)',
+            padding: '0 6px',
+            fontFamily: isTransparent ? 'var(--font-sans)' : 'var(--font-mono)',
             fontSize: '11px',
-            color: 'var(--lb-text-primary)',
+            color: isTransparent ? 'var(--lb-text-secondary)' : 'var(--lb-text-primary)',
             outline: 'none',
             flexShrink: 0,
           }}
@@ -152,10 +163,12 @@ export function ColorPicker({ label, value, onChange }: ColorPickerProps) {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
+          aria-label={`選擇${label}顏色`}
+          aria-expanded={open}
           style={{
             position: 'relative',
-            width: '22px',
-            height: '22px',
+            width: '26px',
+            height: '26px',
             borderRadius: '4px',
             border: '1px solid var(--lb-border)',
             background:

@@ -1,12 +1,21 @@
 import { db } from '@/lib/db'
 import type { Song, Folder } from '@/types'
 import { useSongStore } from '@/stores/useSongStore'
+import { useSaveStatusStore } from '@/stores/useSaveStatusStore'
 
 /**
  * Save (upsert) a song to IndexedDB.
  */
 export async function saveSongToDB(song: Song): Promise<void> {
-  await db.songs.put(song)
+  const status = useSaveStatusStore.getState()
+  status.markSaving()
+  try {
+    await db.songs.put(song)
+    status.markSaved()
+  } catch (err) {
+    status.reset()
+    throw err
+  }
 }
 
 /**
@@ -17,9 +26,14 @@ let _autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 export function debouncedSaveSong(delay = 600) {
   if (_autoSaveTimer) clearTimeout(_autoSaveTimer)
+  if (useSongStore.getState().currentSongId) useSaveStatusStore.getState().markPending()
   _autoSaveTimer = setTimeout(async () => {
+    _autoSaveTimer = null
     const state = useSongStore.getState()
-    if (!state.currentSongId) return
+    if (!state.currentSongId) {
+      useSaveStatusStore.getState().reset()
+      return
+    }
     await saveSongToDB({
       id: state.currentSongId,
       name: state.currentSongTitle,
@@ -41,7 +55,10 @@ export function debouncedSaveSong(delay = 600) {
  * Delete a song from IndexedDB by id.
  */
 export async function deleteSongFromDB(id: number): Promise<void> {
-  await db.songs.delete(id)
+  await db.transaction('rw', db.songs, db.audioFiles, async () => {
+    await db.songs.delete(id)
+    await db.audioFiles.delete(id)
+  })
 }
 
 /**
@@ -151,11 +168,28 @@ export async function updateFolder(id: number, name: string): Promise<void> {
   await db.folders.update(id, { name, updatedAt: Date.now() })
 }
 
-export async function deleteFolder(id: number): Promise<void> {
-  // Unassign all songs from this folder.
+/**
+ * Delete a folder and unassign its songs. Returns the ids of the songs that
+ * were in it so the deletion can be undone with {@link restoreFolder}.
+ */
+export async function deleteFolder(id: number): Promise<number[]> {
   // folderId is not an indexed field, so use .filter() for a full-table scan.
-  await db.songs.filter(s => s.folderId === id).modify({ folderId: null })
-  await db.folders.delete(id)
+  const affected = await db.songs.filter(s => s.folderId === id).primaryKeys()
+  await db.transaction('rw', db.songs, db.folders, async () => {
+    await db.songs.where('id').anyOf(affected).modify({ folderId: null })
+    await db.folders.delete(id)
+  })
+  return affected as number[]
+}
+
+/** Undo {@link deleteFolder}: put the folder back and re-assign its songs. */
+export async function restoreFolder(folder: Folder, songIds: number[]): Promise<void> {
+  await db.transaction('rw', db.songs, db.folders, async () => {
+    await db.folders.put(folder)
+    if (songIds.length) {
+      await db.songs.where('id').anyOf(songIds).modify({ folderId: folder.id })
+    }
+  })
 }
 
 export async function moveSongToFolder(songId: number, folderId: number | null): Promise<void> {

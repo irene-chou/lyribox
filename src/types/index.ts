@@ -26,7 +26,19 @@ export interface Song {
   updatedAt: number
 }
 
+/** Local audio file persisted in IndexedDB so the user need not re-pick it. */
+export interface AudioFileRecord {
+  songId: number
+  name: string
+  type: string
+  size: number
+  blob: Blob
+  savedAt: number
+}
+
 export interface UISettings {
+  /** Store picked local audio files in the browser (IndexedDB). */
+  persistLocalAudio: boolean
   activeFontSize: number
   otherFontSize: number
   titleFontSize: number
@@ -36,6 +48,8 @@ export interface UISettings {
   visibleAfter: number
   activeColor: string
   otherColor: string
+  /** Color for lines that have already been sung. */
+  passedColor: string
   lyricsBgColor: string
   sidebarWidth: number
 }
@@ -62,7 +76,7 @@ export type SyncMessage =
   | { type: 'OFFSET'; data: { offset: number } }
   | { type: 'FONT_SIZE'; data: { activeFontSize: number; otherFontSize: number } }
   | { type: 'TITLE_FONT_SIZE'; data: { titleFontSize: number; showTitle: boolean } }
-  | { type: 'LYRIC_COLORS'; data: { activeColor: string; otherColor: string; lyricsBgColor: string } }
+  | { type: 'LYRIC_COLORS'; data: { activeColor: string; otherColor: string; passedColor: string; lyricsBgColor: string } }
   | { type: 'LYRICS_GAP'; data: { lyricsGap: number } }
   | { type: 'VISIBLE_RANGE'; data: { visibleBefore: number; visibleAfter: number } }
   | { type: 'FULL_STATE'; data: Record<string, unknown> }

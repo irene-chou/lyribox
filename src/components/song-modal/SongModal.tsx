@@ -12,7 +12,9 @@ import { LrcInputTabs } from './LrcInputTabs'
 import { saveSongToDB } from '@/hooks/useSongLibrary'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
+import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { extractVideoId } from '@/lib/format'
+import { saveAudioFile, getAudioFile, deleteAudioFile } from '@/lib/audio-file-store'
 import type { Song, AudioSource } from '@/types'
 
 interface SongModalProps {
@@ -28,19 +30,27 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
   const [audioFileName, setAudioFileName] = useState('')
   const [lrcText, setLrcText] = useState('')
   const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [persistAudio, setPersistAudio] = useState(true)
+  const [lrcError, setLrcError] = useState<string | null>(null)
+  // Size of the copy already stored for the song being edited (null = none)
+  const [storedAudioSize, setStoredAudioSize] = useState<number | null>(null)
 
   const isEditMode = !!editSong
   const loadSong = useSongStore((s) => s.loadSong)
 
   useEffect(() => {
-    if (open && editSong) {
+    if (!open) return
+    setPersistAudio(useUISettingsStore.getState().persistLocalAudio)
+    setStoredAudioSize(null)
+    setLrcError(null)
+    if (editSong) {
       setName(editSong.name)
       setAudioSource(editSong.audioSource)
       setYoutubeUrl(editSong.youtubeId || '')
       setAudioFileName(editSong.audioFileName || '')
       setLrcText(editSong.lrcText)
       setAudioFile(null)
-    } else if (open && !editSong) {
+    } else {
       setName('')
       setAudioSource('youtube')
       setYoutubeUrl('')
@@ -50,11 +60,24 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
     }
   }, [open, editSong])
 
+  // Look up whether the edited song already has a stored audio copy
+  useEffect(() => {
+    if (!open || !editSong) return
+    let cancelled = false
+    getAudioFile(editSong.id).then((record) => {
+      if (cancelled || !record) return
+      setStoredAudioSize(record.size)
+      setPersistAudio(true)
+    })
+    return () => { cancelled = true }
+  }, [open, editSong])
+
   async function handleSave() {
     if (!lrcText.trim()) {
-      alert('請填入 LRC 歌詞。')
+      setLrcError('請填入 LRC 歌詞，或用「線上搜尋」／「讀取檔案」帶入。')
       return
     }
+    setLrcError(null)
 
     const songName = name.trim() || '未命名歌曲'
     const isYoutube = audioSource === 'youtube'
@@ -75,6 +98,18 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
     }
 
     await saveSongToDB(song)
+
+    // Keep or drop the browser-stored copy of the local audio file
+    if (audioSource === 'local') {
+      if (audioFile && persistAudio) {
+        await saveAudioFile(song.id, audioFile)
+      } else if (!persistAudio && storedAudioSize !== null) {
+        await deleteAudioFile(song.id)
+      }
+    } else if (storedAudioSize !== null) {
+      await deleteAudioFile(song.id)
+    }
+
     loadSong(song)
 
     // If local audio, create object URL for playback
@@ -89,6 +124,11 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
   function handleAudioFileChange(file: File, fileName: string) {
     setAudioFile(file)
     setAudioFileName(fileName)
+  }
+
+  function handlePersistAudioChange(persist: boolean) {
+    setPersistAudio(persist)
+    useUISettingsStore.getState().setPersistLocalAudio(persist)
   }
 
   function handleSearchSelect(text: string, trackName: string) {
@@ -164,14 +204,26 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
             onYoutubeUrlChange={setYoutubeUrl}
             audioFileName={audioFileName}
             onAudioFileChange={handleAudioFileChange}
+            persistAudio={persistAudio}
+            onPersistAudioChange={handlePersistAudioChange}
+            storedSize={audioFile ? audioFile.size : storedAudioSize}
+            alreadyStored={storedAudioSize !== null}
           />
 
           {/* LRC input */}
           <LrcInputTabs
             lrcText={lrcText}
-            onLrcTextChange={setLrcText}
+            onLrcTextChange={(text) => {
+              setLrcText(text)
+              if (text.trim()) setLrcError(null)
+            }}
             onSearchSelect={handleSearchSelect}
           />
+          {lrcError && (
+            <p role="alert" className="text-lb-danger" style={{ fontSize: '12px', marginTop: '-8px', lineHeight: 1.5 }}>
+              {lrcError}
+            </p>
+          )}
         </div>
 
         <DialogFooter className="shrink-0">

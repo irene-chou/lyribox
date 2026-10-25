@@ -1,7 +1,7 @@
 import { RotateCcw } from 'lucide-react'
 import { useSongStore } from '@/stores/useSongStore'
-import { debouncedSaveSong } from '@/hooks/useSongLibrary'
-import { CONTROL_BTN_CLASS, OFFSET_BTN_STYLE } from '@/lib/constants'
+import { adjustPitch, resetPitch } from '@/lib/playback-actions'
+import { CONTROL_BTN_CLASS, OFFSET_BTN_STYLE, ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 
 export function PitchControls() {
   const currentSongId = useSongStore((s) => s.currentSongId)
@@ -11,22 +11,9 @@ export function PitchControls() {
   // Only show for local audio (YouTube doesn't support pitch shifting)
   if (!currentSongId || audioSource !== 'local') return null
 
-  function adjustPitch(delta: number) {
-    const current = useSongStore.getState().pitch
-    const newPitch = Math.round((current + delta) * 2) / 2 // round to 0.5
-    const clamped = Math.max(-12, Math.min(12, newPitch))
-    useSongStore.getState().setPitch(clamped)
-    debouncedSaveSong()
-  }
-
-  function resetPitch() {
-    useSongStore.getState().setPitch(0)
-    debouncedSaveSong()
-  }
-
   return (
     <div style={{ marginTop: '4px' }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: '8px' }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: '6px' }}>
         <div
           className="text-lb-text-dim"
           style={{
@@ -38,25 +25,15 @@ export function PitchControls() {
         >
           升降 Key (Pitch)
         </div>
-        <button
-          className="flex text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-input transition-colors cursor-pointer"
-          onClick={resetPitch}
-          title="重置 Key"
-          style={{
-            padding: '4px',
-            borderRadius: '4px',
-            background: 'none',
-            borderStyle: 'none',
-          }}
-        >
+        <button className={ICON_BTN_CLASS} onClick={resetPitch} title="重置 Key" style={ICON_BTN_STYLE}>
           <RotateCcw size={14} />
         </button>
       </div>
       <div className="flex items-center justify-center" style={{ gap: '6px' }}>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(-1)} style={OFFSET_BTN_STYLE}>
+        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(-1)} style={OFFSET_BTN_STYLE} title="降 1 Key">
           -1
         </button>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(-0.5)} style={OFFSET_BTN_STYLE}>
+        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(-0.5)} style={OFFSET_BTN_STYLE} title="降半 Key">
           -½
         </button>
         <span
@@ -72,10 +49,10 @@ export function PitchControls() {
           {pitch >= 0 ? '+' : ''}
           {pitch % 1 === 0 ? pitch.toFixed(0) : pitch.toFixed(1)}
         </span>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(0.5)} style={OFFSET_BTN_STYLE}>
+        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(0.5)} style={OFFSET_BTN_STYLE} title="升半 Key">
           +½
         </button>
-        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(1)} style={OFFSET_BTN_STYLE}>
+        <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(1)} style={OFFSET_BTN_STYLE} title="升 1 Key">
           +1
         </button>
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import { findActiveLineIndex } from '@/lib/lyrics-sync'
 
 function createSyncWorker(): { worker: Worker; blobUrl: string } {
   const blob = new Blob(
@@ -53,14 +54,7 @@ export function useSyncEngine({ getCurrentTime }: UseSyncEngineOptions) {
 
       const currentTime = rawTime + offset
 
-      // Reverse scan to find active line (same algorithm as legacy)
-      let newIndex = -1
-      for (let i = lyrics.length - 1; i >= 0; i--) {
-        if (currentTime >= lyrics[i].time) {
-          newIndex = i
-          break
-        }
-      }
+      const newIndex = findActiveLineIndex(lyrics, currentTime)
 
       const prevIndex = useSyncStore.getState().currentLineIndex
       if (newIndex !== prevIndex) {

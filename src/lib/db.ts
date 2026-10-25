@@ -1,9 +1,10 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Song, Folder } from '@/types'
+import type { Song, Folder, AudioFileRecord } from '@/types'
 
 const db = new Dexie('lyribox-db') as Dexie & {
   songs: EntityTable<Song, 'id'>
   folders: EntityTable<Folder, 'id'>
+  audioFiles: EntityTable<AudioFileRecord, 'songId'>
 }
 
 db.version(1).stores({
@@ -29,6 +30,13 @@ db.version(3).stores({
       song.folderId = null
     }
   })
+})
+
+// Audio blobs live in their own table so song-list live queries never load them.
+db.version(4).stores({
+  songs: 'id',
+  folders: 'id',
+  audioFiles: 'songId',
 })
 
 export { db }

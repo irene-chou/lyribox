@@ -1,93 +1,45 @@
-import { useRef, useCallback, useEffect, useMemo } from 'react'
+import { useRef, useCallback, useMemo } from 'react'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 
-function createTimerWorker(): { worker: Worker; blobUrl: string } {
-  const blob = new Blob(
-    [
-      `
-      let interval = null;
-      self.onmessage = function(e) {
-        if (e.data === 'start') {
-          if (interval) clearInterval(interval);
-          interval = setInterval(function() {
-            self.postMessage('tick');
-          }, 50);
-        } else if (e.data === 'stop') {
-          if (interval) {
-            clearInterval(interval);
-            interval = null;
-          }
-        }
-      };
-    `,
-    ],
-    { type: 'application/javascript' },
-  )
-  const blobUrl = URL.createObjectURL(blob)
-  return { worker: new Worker(blobUrl), blobUrl }
-}
-
+// Time is derived on demand from performance.now(); the sync engine's tick
+// polls getCurrentTime() and pushes it to the store while playing.
 export function useManualTimer() {
-  const workerRef = useRef<Worker | null>(null)
-  const manualTimeRef = useRef(0)
-  const lastTickRef = useRef(0)
+  const baseTimeRef = useRef(0) // accumulated time at last start/seek
+  const startedAtRef = useRef(0) // performance.now() when last started
   const isPlayingRef = useRef(false)
 
-  useEffect(() => {
-    const { worker, blobUrl } = createTimerWorker()
-    workerRef.current = worker
-
-    worker.onmessage = () => {
-      if (!isPlayingRef.current) return
-
-      const now = performance.now()
-      const elapsed = (now - lastTickRef.current) / 1000
-      lastTickRef.current = now
-
-      // Displayed time is pushed by the sync engine
-      manualTimeRef.current += elapsed
-    }
-
-    return () => {
-      worker.postMessage('stop')
-      worker.terminate()
-      URL.revokeObjectURL(blobUrl)
-      workerRef.current = null
-    }
+  const getCurrentTime = useCallback((): number => {
+    if (!isPlayingRef.current) return baseTimeRef.current
+    return baseTimeRef.current + (performance.now() - startedAtRef.current) / 1000
   }, [])
 
   const start = useCallback(() => {
     if (isPlayingRef.current) return
     isPlayingRef.current = true
-    lastTickRef.current = performance.now()
-    workerRef.current?.postMessage('start')
+    startedAtRef.current = performance.now()
     usePlaybackStore.getState().setStatus('PLAYING')
   }, [])
 
   const pause = useCallback(() => {
     if (!isPlayingRef.current) return
+    baseTimeRef.current = getCurrentTime()
     isPlayingRef.current = false
-    workerRef.current?.postMessage('stop')
-    usePlaybackStore.getState().setCurrentTime(manualTimeRef.current)
+    usePlaybackStore.getState().setCurrentTime(baseTimeRef.current)
     usePlaybackStore.getState().setStatus('PAUSED')
-  }, [])
+  }, [getCurrentTime])
 
   const reset = useCallback(() => {
     isPlayingRef.current = false
-    workerRef.current?.postMessage('stop')
-    manualTimeRef.current = 0
+    baseTimeRef.current = 0
     usePlaybackStore.getState().setCurrentTime(0)
     usePlaybackStore.getState().setStatus('IDLE')
   }, [])
 
   const seek = useCallback((delta: number) => {
-    manualTimeRef.current = Math.max(0, manualTimeRef.current + delta)
-    usePlaybackStore.getState().setCurrentTime(manualTimeRef.current)
-  }, [])
-
-  const getCurrentTime = useCallback((): number => {
-    return manualTimeRef.current
-  }, [])
+    baseTimeRef.current = Math.max(0, getCurrentTime() + delta)
+    startedAtRef.current = performance.now()
+    usePlaybackStore.getState().setCurrentTime(baseTimeRef.current)
+  }, [getCurrentTime])
 
   const togglePlay = useCallback(() => {
     if (isPlayingRef.current) {

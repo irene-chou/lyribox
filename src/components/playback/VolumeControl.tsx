@@ -1,6 +1,7 @@
 import { Volume2, VolumeX } from 'lucide-react'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useRef } from 'react'
+import { ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 
 export function VolumeControl() {
   const volume = usePlaybackStore((s) => s.volume)
@@ -31,24 +32,15 @@ export function VolumeControl() {
   const displayVolume = muted ? 0 : volume
 
   return (
-    <div className="flex items-center" style={{ gap: '4px' }}>
+    <div className="flex items-center shrink-0" style={{ gap: '4px' }}>
       <button
-        className="flex text-lb-text-secondary hover:text-lb-text-primary hover:bg-lb-bg-input transition-colors cursor-pointer"
+        className={ICON_BTN_CLASS}
         onClick={handleToggleMute}
-        style={{
-          background: 'none',
-          border: 'none',
-          padding: '2px',
-          borderRadius: '4px',
-          flexShrink: 0,
-        }}
-        title="靜音"
+        style={ICON_BTN_STYLE}
+        title={muted ? '取消靜音' : '靜音'}
+        aria-label={muted ? '取消靜音' : '靜音'}
       >
-        {muted || volume === 0 ? (
-          <VolumeX size={14} />
-        ) : (
-          <Volume2 size={14} />
-        )}
+        {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
       </button>
       <input
         type="range"
@@ -57,9 +49,10 @@ export function VolumeControl() {
         step={1}
         value={displayVolume}
         onChange={handleVolumeChange}
+        aria-label="音量"
         style={{
-          width: '60px',
-          height: '3px',
+          width: '72px',
+          height: '4px',
           appearance: 'none',
           WebkitAppearance: 'none',
           background: `linear-gradient(to right, var(--lb-accent) ${displayVolume}%, var(--lb-border) ${displayVolume}%)`,

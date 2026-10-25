@@ -1,18 +1,21 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { Plus } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react'
 import { Header } from './Header'
 import { ControlPanel } from './ControlPanel'
+import { ShortcutsDialog } from './ShortcutsDialog'
 import { LyricsDisplay } from '../lyrics/LyricsDisplay'
-import { SongDrawer } from '../song-library/SongDrawer'
-import { SongModal } from '../song-modal/SongModal'
 import { usePlaybackEngine } from '@/hooks/usePlaybackEngine'
 import { useSyncEngine } from '@/hooks/useSyncEngine'
 import { useOBSSync } from '@/hooks/useOBSSync'
 import { useSyncBroadcast } from '@/hooks/useSyncBroadcast'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
+import { useSongStore } from '@/stores/useSongStore'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import type { Song } from '@/types'
+
+// Loaded on first open to keep them out of the initial bundle
+const SongDrawer = lazy(() => import('../song-library/SongDrawer').then((m) => ({ default: m.SongDrawer })))
+const SongModal = lazy(() => import('../song-modal/SongModal').then((m) => ({ default: m.SongModal })))
 
 const MIN_SIDEBAR = 320
 const MAX_SIDEBAR = 1280
@@ -20,6 +23,10 @@ const MAX_SIDEBAR = 1280
 export function AppLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // Stay mounted after first open so close animations still play
+  const [drawerMounted, setDrawerMounted] = useState(false)
+  const [modalMounted, setModalMounted] = useState(false)
   const [editSong, setEditSong] = useState<Song | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
@@ -34,21 +41,47 @@ export function AppLayout() {
   const { broadcast } = useOBSSync()
   useSyncBroadcast({ broadcast })
 
+  const handleOpenDrawer = useCallback(() => {
+    setDrawerMounted(true)
+    setDrawerOpen(true)
+  }, [])
+
+  const handleOpenNewSong = useCallback(() => {
+    setEditSong(null)
+    setModalMounted(true)
+    setModalOpen(true)
+  }, [])
+
+  const handleToggleShortcuts = useCallback(() => setShortcutsOpen((v) => !v), [])
+
   // Keyboard shortcuts
-  useKeyboardShortcuts({ engine, onCloseDrawer: () => setDrawerOpen(false) })
+  useKeyboardShortcuts({
+    engine,
+    onCloseDrawer: () => setDrawerOpen(false),
+    onOpenSearch: handleOpenDrawer,
+    onToggleShortcuts: handleToggleShortcuts,
+  })
 
   // Close mobile panel when switching to desktop
   useEffect(() => {
     if (!isMobile) setMobilePanelOpen(false)
   }, [isMobile])
 
-  function handleOpenNewSong() {
-    setEditSong(null)
-    setModalOpen(true)
-  }
+  // Warn before leaving with unsaved changes (auto-save is debounced)
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (useSongStore.getState().hasUnsavedChanges()) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
 
   function handleEditSong(song: Song) {
     setEditSong(song)
+    setModalMounted(true)
     setModalOpen(true)
     if (isMobile) setMobilePanelOpen(false)
   }
@@ -103,7 +136,9 @@ export function AppLayout() {
   return (
     <div className="flex h-screen flex-col">
       <Header
-        onOpenDrawer={() => setDrawerOpen(true)}
+        onOpenDrawer={handleOpenDrawer}
+        onNewSong={handleOpenNewSong}
+        onShowShortcuts={handleToggleShortcuts}
         isMobile={isMobile}
         onToggleMobilePanel={() => setMobilePanelOpen((v) => !v)}
       />
@@ -116,6 +151,9 @@ export function AppLayout() {
 
             {/* Resize handle */}
             <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="調整側欄寬度"
               onMouseDown={handleResizeStart}
               style={{
                 width: '4px',
@@ -134,19 +172,20 @@ export function AppLayout() {
           </>
         )}
 
-        <LyricsDisplay onSeekToLyric={handleSeekToLyric} isMobile={isMobile} />
+        <LyricsDisplay
+          engine={engine}
+          onSeekToLyric={handleSeekToLyric}
+          onNewSong={handleOpenNewSong}
+          onOpenDrawer={handleOpenDrawer}
+          isMobile={isMobile}
+        />
       </div>
 
       {/* Mobile sidebar overlay */}
       {isMobile && mobilePanelOpen && (
         <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50"
-            onClick={() => setMobilePanelOpen(false)}
-          />
-          <div
-            className="fixed inset-y-0 left-0 z-50 w-[320px] max-w-[85vw]"
-          >
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setMobilePanelOpen(false)} />
+          <div className="fixed inset-y-0 left-0 z-50 w-[320px] max-w-[85vw]">
             <ControlPanel
               onEditSong={handleEditSong}
               engine={engine}
@@ -157,49 +196,22 @@ export function AppLayout() {
         </>
       )}
 
-      {/* FAB — New Song */}
-      <button
-        onClick={handleOpenNewSong}
-        className="flex items-center justify-center cursor-pointer bg-lb-accent"
-        style={{
-          position: 'fixed',
-          bottom: isMobile ? '20px' : '28px',
-          right: isMobile ? '20px' : '28px',
-          width: isMobile ? '46px' : '52px',
-          height: isMobile ? '46px' : '52px',
-          borderRadius: '50%',
-          color: '#fff',
-          border: 'none',
-          boxShadow: '0 4px 16px rgba(124, 106, 239, 0.4)',
-          transition: 'transform 0.2s, box-shadow 0.2s',
-          zIndex: 50,
-        }}
-        title="新增歌曲"
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.08)'
-          e.currentTarget.style.boxShadow = '0 6px 24px rgba(124, 106, 239, 0.5)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)'
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(124, 106, 239, 0.4)'
-        }}
-      >
-        <Plus size={isMobile ? 20 : 24} />
-      </button>
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
-      {/* Song Library Drawer */}
-      <SongDrawer
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        isMobile={isMobile}
-      />
+      <Suspense fallback={null}>
+        {drawerMounted && (
+          <SongDrawer
+            open={drawerOpen}
+            onOpenChange={setDrawerOpen}
+            onNewSong={handleOpenNewSong}
+            isMobile={isMobile}
+          />
+        )}
 
-      {/* Song Add/Edit Modal */}
-      <SongModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        editSong={editSong}
-      />
+        {modalMounted && (
+          <SongModal open={modalOpen} onOpenChange={setModalOpen} editSong={editSong} />
+        )}
+      </Suspense>
     </div>
   )
 }
