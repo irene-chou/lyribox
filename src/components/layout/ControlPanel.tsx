@@ -103,36 +103,38 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
 
         {currentSongId ? (
           <>
-            {/* Title + prev/next + save status */}
-            <div className="flex items-center" style={{ gap: '6px' }}>
-              <button
-                className={navBtnClass}
-                style={navBtnStyle}
-                onClick={() => void navigateSong(-1)}
-                title={`上一首 ${shortcutHint('prev-song')}`}
-                aria-label="上一首"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <div className="flex-1 min-w-0 flex flex-col" style={{ gap: '2px' }}>
+            {/* Title + prev/next, save status below (aligned with title) */}
+            <div className="flex flex-col" style={{ gap: '2px' }}>
+              <div className="flex items-center" style={{ gap: '6px' }}>
+                <button
+                  className={navBtnClass}
+                  style={navBtnStyle}
+                  onClick={() => void navigateSong(-1)}
+                  title={`上一首 ${shortcutHint('prev-song')}`}
+                  aria-label="上一首"
+                >
+                  <ChevronLeft size={14} />
+                </button>
                 <span
-                  className="truncate text-lb-text-primary"
-                  style={{ fontSize: '14px', fontWeight: 600 }}
+                  className="flex-1 min-w-0 truncate text-lb-text-primary"
+                  style={{ fontSize: '14px', fontWeight: 600, lineHeight: '28px' }}
                   title={currentSongTitle}
                 >
                   {currentSongTitle}
                 </span>
+                <button
+                  className={navBtnClass}
+                  style={navBtnStyle}
+                  onClick={() => void navigateSong(1)}
+                  title={`下一首 ${shortcutHint('next-song')}`}
+                  aria-label="下一首"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+              <div style={{ paddingLeft: '34px' }}>
                 <SaveStatusIndicator />
               </div>
-              <button
-                className={navBtnClass}
-                style={navBtnStyle}
-                onClick={() => void navigateSong(1)}
-                title={`下一首 ${shortcutHint('next-song')}`}
-                aria-label="下一首"
-              >
-                <ChevronRight size={14} />
-              </button>
             </div>
 
             <AudioPlayer engine={engine} />
