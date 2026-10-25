@@ -13,6 +13,7 @@ import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import type { Song } from '@/types'
+import { track } from '@/lib/analytics'
 
 // Loaded on first open to keep them out of the initial bundle
 const SongDrawer = lazy(() => import('../song-library/SongDrawer').then((m) => ({ default: m.SongDrawer })))
@@ -54,6 +55,9 @@ export function AppLayout() {
   }, [])
 
   const handleToggleShortcuts = useCallback(() => setShortcutsOpen((v) => !v), [])
+  useEffect(() => {
+    if (shortcutsOpen) track('shortcuts_open')
+  }, [shortcutsOpen])
 
   // Keyboard shortcuts
   useKeyboardShortcuts({

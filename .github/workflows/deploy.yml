@@ -33,6 +33,7 @@ jobs:
           VITE_PIESOCKET_API_KEY: ${{ secrets.VITE_PIESOCKET_API_KEY }}
           VITE_PIESOCKET_CLUSTER_ID: ${{ secrets.VITE_PIESOCKET_CLUSTER_ID }}
           VITE_CF_BEACON_TOKEN: ${{ vars.VITE_CF_BEACON_TOKEN }}
+          VITE_UMAMI_WEBSITE_ID: ${{ vars.VITE_UMAMI_WEBSITE_ID }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
