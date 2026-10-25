@@ -210,3 +210,83 @@ test.describe('Create and load song', () => {
     await expect(page.getByLabel('歌曲庫').getByText('Drawer Test Song')).toBeVisible()
   })
 })
+
+/** 2-second mono 16-bit PCM WAV of a 440 Hz tone, generated in memory. */
+function makeToneWav(): Buffer {
+  const sampleRate = 44100
+  const samples = sampleRate * 2
+  const buf = Buffer.alloc(44 + samples * 2)
+  buf.write('RIFF', 0)
+  buf.writeUInt32LE(36 + samples * 2, 4)
+  buf.write('WAVE', 8)
+  buf.write('fmt ', 12)
+  buf.writeUInt32LE(16, 16)
+  buf.writeUInt16LE(1, 20)
+  buf.writeUInt16LE(1, 22)
+  buf.writeUInt32LE(sampleRate, 24)
+  buf.writeUInt32LE(sampleRate * 2, 28)
+  buf.writeUInt16LE(2, 32)
+  buf.writeUInt16LE(16, 34)
+  buf.write('data', 36)
+  buf.writeUInt32LE(samples * 2, 40)
+  for (let i = 0; i < samples; i++) {
+    buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 12000), 44 + i * 2)
+  }
+  return buf
+}
+
+test.describe('Local audio playback', () => {
+  test('stretch worklet keeps running and produces signal', async ({ page }) => {
+    // Observe every AudioWorkletNode: processor crashes are otherwise silent.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __worklets: AudioWorkletNode[]; __procErrors: string[] }
+      w.__worklets = []
+      w.__procErrors = []
+      const Orig = window.AudioWorkletNode
+      window.AudioWorkletNode = class extends Orig {
+        constructor(...args: ConstructorParameters<typeof AudioWorkletNode>) {
+          super(...args)
+          w.__worklets.push(this)
+          this.onprocessorerror = () => w.__procErrors.push('processorerror')
+        }
+      }
+    })
+
+    await page.goto('/')
+    await page.locator('button[title="新增歌曲"]').click()
+    await page.getByPlaceholder('輸入歌曲名稱').fill('Tone Song')
+    await page.locator('textarea').first().fill('[00:00.50]Tone')
+    await page.getByRole('tab', { name: '本地音檔' }).click()
+    await page.locator('input[type="file"]').first().setInputFiles({ name: 'tone.wav', mimeType: 'audio/wav', buffer: makeToneWav() })
+    await page.getByRole('button', { name: '儲存並載入' }).click()
+
+    // Like a real user: the file sits loaded for a moment before play is pressed.
+    await page.waitForTimeout(1500)
+    await page.keyboard.press('Space')
+    await page.waitForTimeout(1000)
+
+    const result = await page.evaluate(async () => {
+      const w = window as unknown as { __worklets: (AudioWorkletNode & { inputTime?: number })[]; __procErrors: string[] }
+      const node = w.__worklets[0]
+      if (!node) return { procErrors: w.__procErrors, inputTime: -1, rms: -1 }
+      const ctx = node.context as AudioContext
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 2048
+      node.connect(analyser)
+      const data = new Float32Array(analyser.fftSize)
+      let rms = 0
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 100))
+        analyser.getFloatTimeDomainData(data)
+        let sum = 0
+        for (const v of data) sum += v * v
+        rms = Math.max(rms, Math.sqrt(sum / data.length))
+      }
+      return { procErrors: w.__procErrors, inputTime: node.inputTime ?? -1, rms }
+    })
+
+    expect(result.procErrors).toEqual([])
+    expect(result.inputTime).toBeGreaterThan(0)
+    expect(result.rms).toBeGreaterThan(0.01)
+  })
+})

@@ -128,8 +128,12 @@ async function loadFactory(): Promise<StretchFactory> {
  */
 export async function createStretchPlayer(ctx: AudioContext): Promise<StretchPlayer> {
   const factory = await loadFactory()
+  // Keep one (unconnected) input: with `numberOfInputs: 0` the worklet's idle
+  // path in signalsmith-stretch 1.3.2 reads `inputList[0].length` on undefined,
+  // the processor throws on its first process() call and is dead for good —
+  // no error surfaces on the main thread, playback is simply silent.
   const node = await factory(ctx, {
-    numberOfInputs: 0,
+    numberOfInputs: 1,
     numberOfOutputs: 1,
     outputChannelCount: [2],
   })
