@@ -31,6 +31,7 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
   const [lrcText, setLrcText] = useState('')
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [persistAudio, setPersistAudio] = useState(true)
+  const [lrcError, setLrcError] = useState<string | null>(null)
   // Size of the copy already stored for the song being edited (null = none)
   const [storedAudioSize, setStoredAudioSize] = useState<number | null>(null)
 
@@ -41,6 +42,7 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
     if (!open) return
     setPersistAudio(useUISettingsStore.getState().persistLocalAudio)
     setStoredAudioSize(null)
+    setLrcError(null)
     if (editSong) {
       setName(editSong.name)
       setAudioSource(editSong.audioSource)
@@ -72,9 +74,10 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
 
   async function handleSave() {
     if (!lrcText.trim()) {
-      alert('請填入 LRC 歌詞。')
+      setLrcError('請填入 LRC 歌詞，或用「線上搜尋」／「讀取檔案」帶入。')
       return
     }
+    setLrcError(null)
 
     const songName = name.trim() || '未命名歌曲'
     const isYoutube = audioSource === 'youtube'
@@ -210,9 +213,17 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
           {/* LRC input */}
           <LrcInputTabs
             lrcText={lrcText}
-            onLrcTextChange={setLrcText}
+            onLrcTextChange={(text) => {
+              setLrcText(text)
+              if (text.trim()) setLrcError(null)
+            }}
             onSearchSelect={handleSearchSelect}
           />
+          {lrcError && (
+            <p role="alert" className="text-lb-danger" style={{ fontSize: '12px', marginTop: '-8px', lineHeight: 1.5 }}>
+              {lrcError}
+            </p>
+          )}
         </div>
 
         <DialogFooter className="shrink-0">

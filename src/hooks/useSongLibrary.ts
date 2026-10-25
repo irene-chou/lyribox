@@ -44,5 +44,6 @@ export {
   createFolder,
   updateFolder,
   deleteFolder,
+  restoreFolder,
   moveSongToFolder,
 } from '@/lib/song-service'

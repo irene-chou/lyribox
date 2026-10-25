@@ -25,13 +25,13 @@ src/
   main.tsx                # ReactDOM entry
   index.css               # Global CSS, theme tokens, shadcn overrides
   components/
-    layout/               # AppLayout (sidebar resize, mobile overlay), Header, ControlPanel
-    lyrics/               # LyricsDisplay, LyricsContainer (auto-scroll), LyricLine (memo), NowSinging, EmptyState
-    playback/             # AudioPlayer, YouTubePlayer, ManualTimerPanel, PlaybackInfo, VolumeControl, OffsetControls
-    settings/             # DisplaySettings, FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
-    song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput
-    song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs
-    ui/                   # shadcn components: button, dialog, drawer, dropdown-menu, input, slider, tabs, textarea
+    layout/               # AppLayout (sidebar resize, mobile overlay), Header, ControlPanel, SaveStatusIndicator, ShortcutsDialog
+    lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
+    playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
+    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
+    song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
+    ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
   hooks/
     usePlaybackEngine.ts  # Unified facade routing to youtube/local/manual player
     useSyncEngine.ts      # Web Worker (80ms tick) for lyric line index computation
@@ -41,20 +41,27 @@ src/
     useLocalAudioPlayer.ts # HTMLAudioElement wrapper
     useManualTimer.ts     # Manual timer (performance.now()-based, polled by sync engine)
     useSongLibrary.ts     # Dexie live query + re-exports song-service functions
-    useKeyboardShortcuts.ts # Global keyboard shortcuts (space, arrows, cmd+s)
+    useKeyboardShortcuts.ts # Global keyboard shortcuts (table lives in lib/shortcuts.ts)
     useIsMobile.ts        # matchMedia breakpoint (768px)
   stores/
     useSongStore.ts       # Current song data, lyrics, offset, dirty tracking
     usePlaybackStore.ts   # Playback status, time, volume, audio file blob URL
     useUISettingsStore.ts # Display settings, persisted to localStorage
     useSyncStore.ts       # Current lyric line index, syncing flag
+    useToastStore.ts      # toast() helper + stack rendered by components/ui/toaster
+    useDialogStore.ts     # confirmDialog() / promptDialog() promises, rendered by components/ui/dialog-host
+    useSaveStatusStore.ts # idle | pending | saving | saved, driven by song-service
   lib/
     db.ts                 # Dexie instance ('lyribox-db', songs table)
     song-service.ts       # CRUD, export/import, validation for songs
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
     format.ts             # formatTime(), extractVideoId()
     piesocket.ts          # Session ID, channel name, OBS URL helpers
-    constants.ts          # DEFAULT_UI_SETTINGS, button style constants
+    constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
+    shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
+    playback-actions.ts   # adjustOffset/setPitch/etc. — store update + active-line resync + debounced save
+    song-selection.ts     # selectSong() (handles local-file prompt), navigateSong(±1), pickLocalAudioFile()
+    song-order.ts         # orderSongs() (folders A→Z then uncategorized), adjacentSong()
     utils.ts              # cn() (clsx + tailwind-merge)
     __tests__/            # Unit tests for lrc-parser, format, song-service
   types/
@@ -80,7 +87,7 @@ public/
 ### State Flow
 - `useSongStore` — current song data, lyrics (parsed from lrcText), offset, audio source, dirty tracking via `lastSavedState`
 - `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl
-- `useUISettingsStore` — font sizes, colors, gaps, visible range, sidebar width (all persisted)
+- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted)
 - `useSyncStore` — currentLineIndex (-1 = before first line), isSyncing flag
 
 ### Component Patterns
@@ -99,6 +106,7 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 - **Local files:** decoded to an `AudioBuffer` and played through a Signalsmith Stretch AudioWorklet (`lib/stretch-player.ts`, wraps the `signalsmith-stretch` WASM package) via `useLocalAudioPlayer`; pitch (升降 Key) is applied in real time, no reprocessing. The library is imported with `?url` + dynamic import so the bundler never minifies its self-stringifying worklet code.
 - **Stored local files:** picked files are optionally persisted as Blobs in the `audioFiles` Dexie table (`lib/audio-file-store.ts`, keyed by songId, separate from `songs` so list queries stay light); `useLocalAudioRestore` reloads them when a song is selected. Preference lives in `useUISettingsStore.persistLocalAudio`.
 - **Manual timer:** Fallback when lyrics exist but no audio source is configured
+- All three sources share the docked `TransportBar` under the lyrics (play/pause, ±5s, progress, offset ±0.1, volume; 歸零 for manual). The sidebar `AudioPlayer` only shows the YouTube iframe / local file picker / manual hint.
 
 ### OBS Sync
 - PieSocket WebSocket for real-time sync to `public/obs.html` (standalone OBS browser source)
@@ -108,12 +116,21 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 - OBS page auto-reconnects and re-requests state every 10s if no messages received
 
 ### Keyboard Shortcuts
+Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `ShortcutsDialog` (`?`) lists them. Button `title`s include the hint via `shortcutHint(id)`.
 - `Space` — toggle play/pause
-- `Escape` — close drawer
-- `←/→` — offset ±0.1s (with Shift: ±0.5s)
-- `↑/↓` — active font size ±2 (clamped 14–60)
+- `↑/↓` — seek -5s / +5s (Shift: ±15s)
+- `←/→` — offset ∓0.1s (Shift: ∓0.5s)
+- `Cmd/Ctrl+↑/↓` — active font size ±2 (clamped 14–60)
+- `Cmd/Ctrl+K` — open song drawer with search focused (Enter loads first match)
+- `Cmd/Ctrl+[` / `]` — previous / next song in library order
 - `Cmd/Ctrl+S` — save current song
-- All shortcuts skip when focus is on input/textarea/select/contentEditable
+- `?` — shortcuts dialog, `Escape` — close drawer
+- Skipped when focus is on input/textarea/select/contentEditable or inside an open dialog/drawer
+
+### Dialogs & Toasts
+- Never use native `alert` / `confirm` / `prompt`. Use `confirmDialog()` / `promptDialog()` from `stores/useDialogStore` (promise-based) and `toast()` from `stores/useToastStore`.
+- Destructive actions (delete song / folder) execute immediately and show a toast with 「復原」; `deleteFolder` returns the moved song ids for `restoreFolder`.
+- Offset / pitch changes go through `lib/playback-actions.ts`, which recomputes the active line immediately (no `setCurrentLineIndex(-1)` flash) and schedules `debouncedSaveSong`; `SaveStatusIndicator` reflects `useSaveStatusStore`.
 
 ## Styling
 

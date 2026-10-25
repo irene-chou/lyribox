@@ -14,7 +14,7 @@ const selectLyricsLoaded = (s: { lyrics: unknown; currentSongTitle: string }) =>
 const selectOffset = (s: { offset: number }) => ({ offset: s.offset })
 const selectFontSize = (s: { activeFontSize: number; otherFontSize: number }) => ({ activeFontSize: s.activeFontSize, otherFontSize: s.otherFontSize })
 const selectTitleFontSize = (s: { titleFontSize: number; showTitle: boolean }) => ({ titleFontSize: s.titleFontSize, showTitle: s.showTitle })
-const selectLyricColors = (s: { activeColor: string; otherColor: string; lyricsBgColor: string }) => ({ activeColor: s.activeColor, otherColor: s.otherColor, lyricsBgColor: s.lyricsBgColor })
+const selectLyricColors = (s: { activeColor: string; otherColor: string; passedColor: string; lyricsBgColor: string }) => ({ activeColor: s.activeColor, otherColor: s.otherColor, passedColor: s.passedColor, lyricsBgColor: s.lyricsBgColor })
 const selectLyricsGap = (s: { lyricsGap: number }) => ({ lyricsGap: s.lyricsGap })
 const selectVisibleRange = (s: { visibleBefore: number; visibleAfter: number }) => ({ visibleBefore: s.visibleBefore, visibleAfter: s.visibleAfter })
 

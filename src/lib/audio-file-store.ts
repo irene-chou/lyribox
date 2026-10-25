@@ -27,6 +27,11 @@ export async function saveAudioFile(songId: number, file: File): Promise<void> {
   await db.audioFiles.put(record)
 }
 
+/** Put back a previously fetched record (used to undo a delete). */
+export async function restoreAudioFile(record: AudioFileRecord): Promise<void> {
+  await db.audioFiles.put(record)
+}
+
 export async function getAudioFile(songId: number): Promise<AudioFileRecord | undefined> {
   return db.audioFiles.get(songId)
 }
