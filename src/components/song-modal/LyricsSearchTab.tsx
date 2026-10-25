@@ -26,7 +26,7 @@ export function LyricsSearchTab({ onSelect }: LyricsSearchTabProps) {
       const data = await searchLyrics(q)
       const synced = data.filter((r) => r.syncedLyrics)
       setResults(synced)
-      track('lyrics_search', { results: synced.length })
+      track('lyrics_search', { query: q, results: synced.length })
     } catch {
       setError('搜尋失敗，請稍後再試。')
       setResults([])

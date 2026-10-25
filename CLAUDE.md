@@ -59,7 +59,7 @@ src/
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
-    analytics.ts          # track(event, data) → Umami custom events; no-op unless Umami is injected. Never send titles/lyrics/file names
+    analytics.ts          # track(event, data) → Umami custom events; no-op unless Umami is injected. Sends song title / youtube id, never lyrics or local file names
     playback-actions.ts   # adjustOffset/setPitch/etc. — store update + active-line resync + debounced save
     song-selection.ts     # selectSong() (handles local-file prompt), navigateSong(±1), pickLocalAudioFile()
     song-order.ts         # orderSongs() (folders A→Z then uncategorized), adjacentSong()

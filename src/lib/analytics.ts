@@ -3,8 +3,8 @@
  *
  * Umami is only injected into production builds when VITE_UMAMI_WEBSITE_ID is
  * set (see `analyticsPlugin` in vite.config.ts), so everywhere else this is a
- * no-op. Keep payloads to small enums/numbers — never song titles, lyrics,
- * file names or anything else a user typed.
+ * no-op. Payloads are enums/numbers plus the song title / YouTube id (kept on
+ * purpose to see what people sing); never lyrics text or local file names.
  */
 
 export type AnalyticsEvent =

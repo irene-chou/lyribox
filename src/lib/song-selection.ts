@@ -42,7 +42,7 @@ export function pickLocalAudioFile(song: Song): void {
  */
 export async function selectSong(song: Song): Promise<void> {
   useSongStore.getState().loadSong(song)
-  track('song_load', { source: song.audioSource })
+  track('song_load', { source: song.audioSource, title: song.name, youtube_id: song.youtubeId ?? '' })
   if (song.audioSource !== 'local') return
   const stored = await db.audioFiles.get(song.id)
   if (stored) return

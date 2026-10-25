@@ -99,7 +99,12 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
     }
 
     await saveSongToDB(song)
-    track(isEditMode ? 'song_edit' : 'song_create', { source: audioSource, has_lrc: song.lrcText.length > 0 })
+    track(isEditMode ? 'song_edit' : 'song_create', {
+      source: audioSource,
+      has_lrc: song.lrcText.length > 0,
+      title: song.name,
+      youtube_id: song.youtubeId ?? '',
+    })
 
     // Keep or drop the browser-stored copy of the local audio file
     if (audioSource === 'local') {
