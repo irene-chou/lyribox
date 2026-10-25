@@ -211,6 +211,29 @@ test.describe('Create and load song', () => {
   })
 })
 
+test.describe('OBS sync connection', () => {
+  test('opens no PieSocket socket until the OBS URL is copied', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    const sockets: string[] = []
+    page.on('websocket', (ws) => sockets.push(ws.url()))
+
+    await page.goto('/')
+    await page.locator('button[title="新增歌曲"]').click()
+    await page.getByPlaceholder('輸入歌曲名稱').fill('No Socket Song')
+    await page.locator('textarea').first().fill('[00:01.00]Hello')
+    await page.getByRole('button', { name: '儲存並載入' }).click()
+    await page.waitForTimeout(1500)
+    expect(sockets.filter((u) => u.includes('piesocket'))).toEqual([])
+
+    await page.locator('button[title="複製 OBS 瀏覽器來源 URL"]').click()
+    await expect.poll(() => sockets.filter((u) => u.includes('piesocket')).length, { timeout: 5000 }).toBeGreaterThan(0)
+
+    // Opt-in persists across reloads
+    await page.reload()
+    await expect.poll(() => sockets.filter((u) => u.includes('piesocket')).length, { timeout: 5000 }).toBeGreaterThan(1)
+  })
+})
+
 /** 2-second mono 16-bit PCM WAV of a 440 Hz tone, generated in memory. */
 function makeToneWav(): Buffer {
   const sampleRate = 44100

@@ -8,6 +8,7 @@ import {
 import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { useSyncStore } from '@/stores/useSyncStore'
+import { observeReconnects } from '@/lib/piesocket'
 import type { SyncMessage, SyncMessageType } from '@/types'
 
 const VALID_SYNC_TYPES = new Set<string>([
@@ -31,6 +32,8 @@ export function useOBSSync() {
   const psRef = useRef<PieSocketClass | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const sessionId = getSessionId()
+  // Only browsers that copied the OBS URL ever open a PieSocket connection
+  const obsSyncEnabled = useUISettingsStore((s) => s.obsSyncEnabled)
 
   const broadcast = useCallback(
     (type: SyncMessageType, data: Record<string, unknown>) => {
@@ -68,8 +71,9 @@ export function useOBSSync() {
     })
   }, [broadcast])
 
-  // Initialize PieSocket connection
+  // Initialize PieSocket connection (lazily — see obsSyncEnabled)
   useEffect(() => {
+    if (!obsSyncEnabled) return
     if (typeof window === 'undefined' || !window.PieSocket) {
       console.warn('PieSocket not loaded. OBS sync disabled.')
       return
@@ -99,6 +103,11 @@ export function useOBSSync() {
       })
 
       console.log('PieSocket connected:', channelName)
+
+      // An OBS page that was already open sent REQUEST_STATE to nobody — push state now,
+      // and again whenever our own socket reconnects after a drop.
+      broadcastFullState()
+      observeReconnects(ch, broadcastFullState)
     })
 
     return () => {
@@ -111,7 +120,7 @@ export function useOBSSync() {
       psRef.current = null
       setIsConnected(false)
     }
-  }, [broadcastFullState])
+  }, [broadcastFullState, obsSyncEnabled])
 
   // Auto-broadcast on tab visibility change
   useEffect(() => {

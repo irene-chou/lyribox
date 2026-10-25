@@ -131,7 +131,18 @@
   let lyricsBgColor = 'transparent';
   let songTitle = '';
   let syncChannel = null;
-  let lastMessageTime = 0;
+  let gotState = false;
+  // After a (re)connect, retry the state request a couple of times if nothing
+  // has arrived (covers a dropped first message). Bounded — no polling while idle.
+  const INITIAL_RETRY_DELAYS_MS = [5000, 20000];
+  let retryTimers = [];
+  function scheduleInitialRetries() {
+    retryTimers.forEach(clearTimeout);
+    gotState = false;
+    retryTimers = INITIAL_RETRY_DELAYS_MS.map((ms) => setTimeout(() => {
+      if (!gotState) requestFullState();
+    }, ms));
+  }
 
   function applyGap() {
     document.getElementById('lyricsContainer').style.gap = lyricsGap + 'px';
@@ -178,8 +189,8 @@
       syncChannel = ch;
 
       ch.listen('sync', (msg) => {
-        lastMessageTime = Date.now();
         const { type, data } = msg;
+        if (type === 'FULL_STATE' || type === 'LYRICS_LOADED') gotState = true;
         switch (type) {
           case 'FULL_STATE':
             lyrics = data.lyrics || [];
@@ -248,8 +259,29 @@
         }
       });
 
-      // Request full state on connect
+      // Ask for the full state once on connect. The control page also pushes it
+      // whenever it (re)connects, so no polling is needed while idle.
       requestFullState();
+      scheduleInitialRetries();
+
+      // piesocket-js reconnects dropped sockets itself but emits no 'open' event;
+      // it re-reads channel.onOpen on every reconnect, so hook it to re-request state.
+      const originalOnOpen = ch.onOpen.bind(ch);
+      ch.onOpen = (event) => {
+        originalOnOpen(event);
+        console.log('Reconnected, re-requesting state');
+        requestFullState();
+        scheduleInitialRetries();
+      };
+
+      // If the server rejected the channel the library gives up; start over after a pause.
+      ch.on('close', () => {
+        if (ch.shouldReconnect) return;
+        console.warn('Channel closed for good, resubscribing in 3s');
+        syncChannel = null;
+        piesocket.unsubscribe(channelName);
+        setTimeout(connectChannel, 3000);
+      });
     }).catch(err => {
       console.error('PieSocket subscribe failed:', err);
       setTimeout(connectChannel, 3000);
@@ -257,14 +289,6 @@
   }
 
   connectChannel();
-
-  // Periodically re-request state if no messages received (handles reconnection)
-  setInterval(() => {
-    if (syncChannel && Date.now() - lastMessageTime > 10000) {
-      console.log('No messages for 10s, re-requesting state...');
-      requestFullState();
-    }
-  }, 5000);
 
   function renderLyrics() {
     const container = document.getElementById('lyricsContainer');
