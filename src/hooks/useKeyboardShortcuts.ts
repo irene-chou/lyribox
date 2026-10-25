@@ -84,24 +84,24 @@ export function useKeyboardShortcuts({
 
         case 'ArrowLeft':
           e.preventDefault()
-          adjustOffset(e.shiftKey ? -OFFSET_STEP_LARGE : -OFFSET_STEP)
+          if (hasSong) engine.seekBy(e.shiftKey ? -SEEK_STEP_LARGE : -SEEK_STEP)
           return
 
         case 'ArrowRight':
           e.preventDefault()
-          adjustOffset(e.shiftKey ? OFFSET_STEP_LARGE : OFFSET_STEP)
+          if (hasSong) engine.seekBy(e.shiftKey ? SEEK_STEP_LARGE : SEEK_STEP)
           return
 
         case 'ArrowUp':
           e.preventDefault()
           if (isCmd) adjustActiveFontSize(2)
-          else if (hasSong) engine.seekBy(e.shiftKey ? -SEEK_STEP_LARGE : -SEEK_STEP)
+          else adjustOffset(e.shiftKey ? OFFSET_STEP_LARGE : OFFSET_STEP)
           return
 
         case 'ArrowDown':
           e.preventDefault()
           if (isCmd) adjustActiveFontSize(-2)
-          else if (hasSong) engine.seekBy(e.shiftKey ? SEEK_STEP_LARGE : SEEK_STEP)
+          else adjustOffset(e.shiftKey ? -OFFSET_STEP_LARGE : -OFFSET_STEP)
           return
 
       }

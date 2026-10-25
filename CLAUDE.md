@@ -118,8 +118,8 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 ### Keyboard Shortcuts
 Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `ShortcutsDialog` (`?`) lists them. Button `title`s include the hint via `shortcutHint(id)`.
 - `Space` — toggle play/pause
-- `↑/↓` — seek -5s / +5s (Shift: ±15s)
-- `←/→` — offset ∓0.1s (Shift: ∓0.5s)
+- `←/→` — seek -5s / +5s (Shift: ±15s)
+- `↑/↓` — offset +0.1s / -0.1s (Shift: ±0.5s)
 - `Cmd/Ctrl+↑/↓` — active font size ±2 (clamped 14–60)
 - `Cmd/Ctrl+K` — open song drawer with search focused (Enter loads first match)
 - `Cmd/Ctrl+[` / `]` — previous / next song in library order
