@@ -56,12 +56,40 @@ function envReplacementPlugin(env: Record<string, string>): Plugin {
   }
 }
 
+/**
+ * Inject Cloudflare Web Analytics into index.html when VITE_CF_BEACON_TOKEN is set.
+ * Cookie-less, no personal data collected. Only applied on `build`, so the dev
+ * server never reports. obs.html is intentionally left out — an idle OBS
+ * browser source is not a visit.
+ */
+function cloudflareAnalyticsPlugin(env: Record<string, string>): Plugin {
+  const token = (env.VITE_CF_BEACON_TOKEN ?? '').trim()
+  return {
+    name: 'cloudflare-web-analytics',
+    apply: 'build',
+    transformIndexHtml() {
+      if (!/^[a-f0-9]{32}$/i.test(token)) return []
+      return [
+        {
+          tag: 'script',
+          attrs: {
+            type: 'module',
+            src: 'https://static.cloudflareinsights.com/beacon.min.js',
+            'data-cf-beacon': JSON.stringify({ token }),
+          },
+          injectTo: 'body',
+        },
+      ]
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
 
   return {
     base: '/',
-    plugins: [react(), tailwindcss(), envReplacementPlugin(env)],
+    plugins: [react(), tailwindcss(), envReplacementPlugin(env), cloudflareAnalyticsPlugin(env)],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

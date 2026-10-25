@@ -183,6 +183,7 @@ Dexie v4 (IndexedDB wrapper):
 Copy `.env.example` to `.env`:
 - `VITE_PIESOCKET_API_KEY` — PieSocket API key for OBS sync
 - `VITE_PIESOCKET_CLUSTER_ID` — PieSocket cluster (default: `demo`)
+- `VITE_CF_BEACON_TOKEN` — optional Cloudflare Web Analytics token; when set, `cloudflareAnalyticsPlugin` in `vite.config.ts` injects the cookie-less beacon into `index.html` only (build only, not `obs.html`). Set as a GitHub Actions repository **variable** for deploys.
 
 These are also injected into `public/obs.html` via a custom Vite plugin (`envReplacementPlugin` in `vite.config.ts`) that replaces `__VITE_PIESOCKET_API_KEY__` and `__VITE_PIESOCKET_CLUSTER_ID__` placeholders.
 
