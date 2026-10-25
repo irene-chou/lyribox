@@ -10,6 +10,7 @@ import { useSyncBroadcast } from '@/hooks/useSyncBroadcast'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { useSongStore } from '@/stores/useSongStore'
+import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import type { Song } from '@/types'
 
@@ -86,9 +87,11 @@ export function AppLayout() {
     if (isMobile) setMobilePanelOpen(false)
   }
 
+  // Clicking a lyric line jumps there and starts playback if it isn't already running
   const handleSeekToLyric = useCallback(
     (time: number) => {
       engine.seekTo(time)
+      if (usePlaybackStore.getState().status !== 'PLAYING') engine.play()
     },
     [engine],
   )
