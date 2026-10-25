@@ -59,6 +59,7 @@ src/
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
+    analytics.ts          # track(event, data) → Umami custom events; no-op unless Umami is injected. Never send titles/lyrics/file names
     playback-actions.ts   # adjustOffset/setPitch/etc. — store update + active-line resync + debounced save
     song-selection.ts     # selectSong() (handles local-file prompt), navigateSong(±1), pickLocalAudioFile()
     song-order.ts         # orderSongs() (folders A→Z then uncategorized), adjacentSong()
@@ -183,7 +184,7 @@ Dexie v4 (IndexedDB wrapper):
 Copy `.env.example` to `.env`:
 - `VITE_PIESOCKET_API_KEY` — PieSocket API key for OBS sync
 - `VITE_PIESOCKET_CLUSTER_ID` — PieSocket cluster (default: `demo`)
-- `VITE_CF_BEACON_TOKEN` — optional Cloudflare Web Analytics token; when set, `cloudflareAnalyticsPlugin` in `vite.config.ts` injects the cookie-less beacon into `index.html` only (build only, not `obs.html`). Set as a GitHub Actions repository **variable** for deploys.
+- `VITE_CF_BEACON_TOKEN` / `VITE_UMAMI_WEBSITE_ID` — optional Cloudflare Web Analytics token / Umami Cloud website id; when set, `analyticsPlugin` in `vite.config.ts` injects the cookie-less scripts into `index.html` only (build only, not `obs.html`). Set as GitHub Actions repository **variables** for deploys.
 
 These are also injected into `public/obs.html` via a custom Vite plugin (`envReplacementPlugin` in `vite.config.ts`) that replaces `__VITE_PIESOCKET_API_KEY__` and `__VITE_PIESOCKET_CLUSTER_ID__` placeholders.
 

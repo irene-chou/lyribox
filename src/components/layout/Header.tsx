@@ -5,6 +5,7 @@ import { getOBSUrl } from '@/lib/piesocket'
 import { promptDialog } from '@/stores/useDialogStore'
 import { toast } from '@/stores/useToastStore'
 import { shortcutHint } from '@/lib/shortcuts'
+import { track } from '@/lib/analytics'
 
 interface HeaderProps {
   onOpenDrawer: () => void
@@ -19,11 +20,14 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
   const [copied, setCopied] = useState(false)
 
   function toggleTheme() {
-    setTheme(theme === 'dark' ? 'light' : 'dark')
+    const next = theme === 'dark' ? 'light' : 'dark'
+    track('theme_toggle', { to: next })
+    setTheme(next)
   }
 
   const copyOBSUrl = useCallback(async () => {
     const url = getOBSUrl()
+    track('obs_url_copy')
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)

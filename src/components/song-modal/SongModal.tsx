@@ -10,6 +10,7 @@ import {
 import { AudioSourceTabs } from './AudioSourceTabs'
 import { LrcInputTabs } from './LrcInputTabs'
 import { saveSongToDB } from '@/hooks/useSongLibrary'
+import { track } from '@/lib/analytics'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
@@ -98,6 +99,7 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
     }
 
     await saveSongToDB(song)
+    track(isEditMode ? 'song_edit' : 'song_create', { source: audioSource, has_lrc: song.lrcText.length > 0 })
 
     // Keep or drop the browser-stored copy of the local audio file
     if (audioSource === 'local') {

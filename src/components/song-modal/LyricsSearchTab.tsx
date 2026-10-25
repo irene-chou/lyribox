@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { track } from '@/lib/analytics'
 import { Search, Loader2 } from 'lucide-react'
 import { searchLyrics, type LrclibSearchResult } from '@/lib/lrclib'
 
@@ -23,7 +24,9 @@ export function LyricsSearchTab({ onSelect }: LyricsSearchTabProps) {
 
     try {
       const data = await searchLyrics(q)
-      setResults(data.filter((r) => r.syncedLyrics))
+      const synced = data.filter((r) => r.syncedLyrics)
+      setResults(synced)
+      track('lyrics_search', { results: synced.length })
     } catch {
       setError('搜尋失敗，請稍後再試。')
       setResults([])

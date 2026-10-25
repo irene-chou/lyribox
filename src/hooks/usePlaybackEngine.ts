@@ -4,6 +4,7 @@ import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useYouTubePlayer } from './useYouTubePlayer'
 import { useLocalAudioPlayer } from './useLocalAudioPlayer'
 import { useManualTimer } from './useManualTimer'
+import { track } from '@/lib/analytics'
 
 export function usePlaybackEngine() {
   const youtube = useYouTubePlayer()
@@ -25,6 +26,7 @@ export function usePlaybackEngine() {
 
   const play = useCallback(() => {
     const engine = getActiveEngine()
+    track('play', { source: engine })
     switch (engine) {
       case 'youtube':
         youtube.play()

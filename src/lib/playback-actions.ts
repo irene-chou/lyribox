@@ -1,4 +1,5 @@
 import { useSongStore } from '@/stores/useSongStore'
+import { track } from '@/lib/analytics'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
@@ -58,11 +59,13 @@ export function setPitch(value: number) {
 export function adjustPitch(delta: number) {
   if (!useSongStore.getState().currentSongId) return
   setPitch(useSongStore.getState().pitch + delta)
+  track('pitch_change', { semitones: useSongStore.getState().pitch })
 }
 
 export function resetPitch() {
   if (!useSongStore.getState().currentSongId) return
   setPitch(0)
+  track('pitch_change', { semitones: 0 })
 }
 
 export function adjustActiveFontSize(delta: number) {

@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin, type HtmlTagDescriptor } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
@@ -57,29 +57,39 @@ function envReplacementPlugin(env: Record<string, string>): Plugin {
 }
 
 /**
- * Inject Cloudflare Web Analytics into index.html when VITE_CF_BEACON_TOKEN is set.
- * Cookie-less, no personal data collected. Only applied on `build`, so the dev
- * server never reports. obs.html is intentionally left out — an idle OBS
- * browser source is not a visit.
+ * Inject cookie-less page-view analytics into index.html at build time:
+ * - Cloudflare Web Analytics when VITE_CF_BEACON_TOKEN is set
+ * - Umami Cloud when VITE_UMAMI_WEBSITE_ID is set
+ * Only applied on `build`, so the dev server never reports. obs.html is
+ * intentionally left out — an idle OBS browser source is not a visit.
  */
-function cloudflareAnalyticsPlugin(env: Record<string, string>): Plugin {
-  const token = (env.VITE_CF_BEACON_TOKEN ?? '').trim()
+function analyticsPlugin(env: Record<string, string>): Plugin {
+  const cfToken = (env.VITE_CF_BEACON_TOKEN ?? '').trim()
+  const umamiId = (env.VITE_UMAMI_WEBSITE_ID ?? '').trim()
   return {
-    name: 'cloudflare-web-analytics',
+    name: 'analytics',
     apply: 'build',
     transformIndexHtml() {
-      if (!/^[a-f0-9]{32}$/i.test(token)) return []
-      return [
-        {
+      const tags: HtmlTagDescriptor[] = []
+      if (/^[a-f0-9]{32}$/i.test(cfToken)) {
+        tags.push({
           tag: 'script',
           attrs: {
             type: 'module',
             src: 'https://static.cloudflareinsights.com/beacon.min.js',
-            'data-cf-beacon': JSON.stringify({ token }),
+            'data-cf-beacon': JSON.stringify({ token: cfToken }),
           },
           injectTo: 'body',
-        },
-      ]
+        })
+      }
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(umamiId)) {
+        tags.push({
+          tag: 'script',
+          attrs: { defer: true, src: 'https://cloud.umami.is/script.js', 'data-website-id': umamiId },
+          injectTo: 'body',
+        })
+      }
+      return tags
     },
   }
 }
@@ -89,7 +99,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: '/',
-    plugins: [react(), tailwindcss(), envReplacementPlugin(env), cloudflareAnalyticsPlugin(env)],
+    plugins: [react(), tailwindcss(), envReplacementPlugin(env), analyticsPlugin(env)],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

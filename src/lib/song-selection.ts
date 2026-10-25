@@ -4,6 +4,7 @@ import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { saveAudioFile } from '@/lib/audio-file-store'
 import { orderSongs, adjacentSong } from '@/lib/song-order'
+import { track } from '@/lib/analytics'
 import type { Song } from '@/types'
 
 /**
@@ -41,6 +42,7 @@ export function pickLocalAudioFile(song: Song): void {
  */
 export async function selectSong(song: Song): Promise<void> {
   useSongStore.getState().loadSong(song)
+  track('song_load', { source: song.audioSource })
   if (song.audioSource !== 'local') return
   const stored = await db.audioFiles.get(song.id)
   if (stored) return
