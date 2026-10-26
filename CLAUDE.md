@@ -34,6 +34,7 @@ src/
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection, PlaylistSection (歌單: reorder, 歌單模式, 自動下一首)
     song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
+    song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab, LrcTimingTab (打軸: Enter stamps current playback time per line)
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
   hooks/
     usePlaybackEngine.ts  # Unified facade routing to youtube/local/manual player
@@ -61,6 +62,8 @@ src/
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization, Enhanced LRC `<mm:ss.xx>` word tags → `words` / `endTime`)
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization); exports parseTimeTags()/isMetadataLine()
     lrc-merge.ts          # mergeTranslationLrc(): attach a separate translation/romanization LRC to the nearest primary timestamps (±0.3s) as duplicate-timestamp lines; formatTimeTag()
+    lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
+    lrc-timing.ts         # Line-oriented LRC model for the 打軸 editor (stamp/clear/adjust, LRC ⇄ lines)
     format.ts             # formatTime(), extractVideoId()
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     obs-state.ts          # buildFullState() — FULL_STATE payload shared by PieSocket broadcast and preview
