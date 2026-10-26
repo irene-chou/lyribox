@@ -30,6 +30,9 @@ src/
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
     settings/             # DisplaySettings (collapsible), OBSPreview (embedded obs.html iframe), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl, ObsPresetsDialog (manage OBS URL presets)
+    lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
+    playback/             # TransportBar (docked play/seek/progress/offset/volume; WaveformBar canvas replaces the progress bar for decoded local files), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
+    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection, PlaylistSection (歌單: reorder, 歌單模式, 自動下一首)
@@ -65,6 +68,7 @@ src/
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
     lrc-timing.ts         # Line-oriented LRC model for the 打軸 editor (stamp/clear/adjust, LRC ⇄ lines)
     format.ts             # formatTime(), extractVideoId()
+    waveform.ts           # computePeaks(audioBuffer, buckets) → normalized Float32Array for the TransportBar waveform
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     obs-state.ts          # buildFullState() — FULL_STATE payload shared by PieSocket broadcast and preview
     obs-preview-bridge.ts # In-page pub/sub mirroring outgoing SyncMessages to the embedded OBS preview
@@ -104,6 +108,8 @@ public/
 - `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl
 - `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen`, `obsPreviewOpen` (all persisted)
 - `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted); also the playlist (`playlist` ids, `playlistEnabled`, `autoNext`, `playlistOpen`), not touched by `resetAll`
+- `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl, waveform (peaks of the decoded local file, cleared whenever the blob URL changes)
+- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted)
 - `useSyncStore` — currentLineIndex (-1 = before first line), isSyncing flag
 - `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted)
 - `useSyncStore` — currentLineIndex (-1 = before first line), syncTime (offset-applied time, non-null only on word-timed lines), isSyncing flag

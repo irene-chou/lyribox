@@ -2,6 +2,7 @@ import { useRef, useCallback, useEffect, useMemo } from 'react'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useSongStore } from '@/stores/useSongStore'
 import { createStretchPlayer, type StretchPlayer } from '@/lib/stretch-player'
+import { computePeaks } from '@/lib/waveform'
 
 /**
  * Local file playback through a Signalsmith Stretch worklet. The worklet owns
@@ -160,6 +161,7 @@ export function useLocalAudioPlayer() {
       if (generation !== loadGenerationRef.current) return
 
       durationRef.current = audioBuffer.duration
+      usePlaybackStore.getState().setWaveform(computePeaks(audioBuffer))
       usePlaybackStore.getState().setDuration(audioBuffer.duration)
       usePlaybackStore.getState().setCurrentTime(0)
       usePlaybackStore.getState().setStatus('IDLE')

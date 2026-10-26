@@ -8,6 +8,8 @@ interface PlaybackState {
   volume: number
   muted: boolean
   audioFileObjectUrl: string | null
+  /** Normalized peaks of the decoded local file (null for YouTube / manual / not yet decoded). */
+  waveform: Float32Array | null
 
   // Actions
   setStatus: (status: PlaybackStatus) => void
@@ -17,6 +19,7 @@ interface PlaybackState {
   setMuted: (muted: boolean) => void
   toggleMute: () => void
   setAudioFileObjectUrl: (url: string | null) => void
+  setWaveform: (waveform: Float32Array | null) => void
   reset: () => void
 }
 
@@ -27,6 +30,7 @@ const initialState = {
   volume: 100,
   muted: false,
   audioFileObjectUrl: null,
+  waveform: null as Float32Array | null,
 }
 
 export const usePlaybackStore = create<PlaybackState>((set, get) => ({
@@ -47,8 +51,10 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
     if (prev) {
       URL.revokeObjectURL(prev)
     }
-    set({ audioFileObjectUrl })
+    // A new (or no) file means the old waveform no longer applies
+    set({ audioFileObjectUrl, waveform: null })
   },
+  setWaveform: (waveform) => set({ waveform }),
   reset: () => {
     const prev = get().audioFileObjectUrl
     if (prev) {
