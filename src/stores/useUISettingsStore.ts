@@ -1,9 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { UISettings } from '@/types'
-import { DEFAULT_UI_SETTINGS } from '@/lib/constants'
+import type { ObsPreset, ObsUrlParams, UISettings } from '@/types'
+import { DEFAULT_OBS_PRESETS, DEFAULT_UI_SETTINGS } from '@/lib/constants'
 
 interface UISettingsState extends UISettings {
+  /** Named OBS URL param sets offered when copying the OBS URL (not part of resetAll). */
+  obsPresets: ObsPreset[]
+  addObsPreset: (name: string, params?: ObsUrlParams) => ObsPreset
+  updateObsPreset: (id: string, patch: Partial<Pick<ObsPreset, 'name' | 'params'>>) => void
+  removeObsPreset: (id: string) => void
   /** Whether the "顯示設定" panel in the sidebar is expanded (not part of resetAll). */
   displaySettingsOpen: boolean
   /**
@@ -36,6 +41,20 @@ export const useUISettingsStore = create<UISettingsState>()(
       ...DEFAULT_UI_SETTINGS,
       displaySettingsOpen: false,
       obsSyncEnabled: false,
+      obsPresets: DEFAULT_OBS_PRESETS,
+
+      addObsPreset: (name, params = {}) => {
+        const preset: ObsPreset = {
+          id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `p-${Date.now()}`,
+          name,
+          params,
+        }
+        set((s) => ({ obsPresets: [...s.obsPresets, preset] }))
+        return preset
+      },
+      updateObsPreset: (id, patch) =>
+        set((s) => ({ obsPresets: s.obsPresets.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
+      removeObsPreset: (id) => set((s) => ({ obsPresets: s.obsPresets.filter((p) => p.id !== id) })),
 
       setActiveFontSize: (size: number) => set({ activeFontSize: size }),
       setOtherFontSize: (size: number) => set({ otherFontSize: size }),

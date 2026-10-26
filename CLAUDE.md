@@ -28,7 +28,7 @@ src/
     layout/               # AppLayout (sidebar resize, mobile overlay), Header, ControlPanel, SaveStatusIndicator, ShortcutsDialog
     lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
-    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl, ObsPresetsDialog (manage OBS URL presets)
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
     song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
@@ -56,7 +56,7 @@ src/
     song-service.ts       # CRUD, export/import, validation for songs
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
     format.ts             # formatTime(), extractVideoId()
-    piesocket.ts          # Session ID, channel name, OBS URL helpers
+    piesocket.ts          # Session ID, channel name, OBS URL helpers (buildObsUrl appends preset params)
     obs-params.ts         # parseObsParams(): URL query overrides for obs.html (align/shadow/anim/before/after/size/otherSize/title/bg); obs.html keeps an inline copy
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
@@ -115,6 +115,7 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 - Channel: `lyribox-{sessionId}` where sessionId is stored in `localStorage['lb-session-id']`
 - `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
 - `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
+- **URL params / presets:** `obs.html` accepts appearance overrides as query params (`lib/obs-params.ts`; params win over synced settings via a single `effective()` step). `useUISettingsStore.obsPresets` holds named param sets (seeded with 多行歌詞 / 單行字幕 from `DEFAULT_OBS_PRESETS`); the Header OBS button is a split button — main part copies the plain URL, the chevron lists presets and opens `ObsPresetsDialog`
 - **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
 - OBS page requests state once per (re)connect (plus bounded retries at 5s/20s if nothing arrived) — no polling while idle. piesocket-js 5.x emits no 'open' event, so reconnects are observed by overriding `channel.onOpen` (`lib/piesocket.ts` `observeReconnects`, same trick inline in `obs.html`)
 

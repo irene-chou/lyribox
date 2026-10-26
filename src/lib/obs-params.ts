@@ -8,28 +8,7 @@
  * `parseObsParams` (it cannot import modules). Keep both in sync.
  */
 
-export type ObsAlign = 'left' | 'center' | 'right'
-
-export interface ObsUrlParams {
-  /** Horizontal text alignment of the lyrics block. */
-  align?: ObsAlign
-  /** Draw a dark text shadow behind lyrics (helps over bright video). */
-  shadow?: boolean
-  /** Animate size / colour transitions between lines (default on). */
-  anim?: boolean
-  /** Lines shown before the active line (overrides synced visibleBefore). */
-  before?: number
-  /** Lines shown after the active line (overrides synced visibleAfter). */
-  after?: number
-  /** Active line font size in px (overrides synced activeFontSize). */
-  size?: number
-  /** Other lines font size in px (overrides synced otherFontSize). */
-  otherSize?: number
-  /** Show the "Now singing" title block (overrides synced showTitle). */
-  title?: boolean
-  /** CSS colour for the page background (overrides synced lyricsBgColor). */
-  bg?: string
-}
+import type { ObsAlign, ObsUrlParams } from '@/types'
 
 export const OBS_PARAM_KEYS: (keyof ObsUrlParams)[] = [
   'align',
@@ -90,6 +69,23 @@ export function parseObsParams(search: string): ObsUrlParams {
   if (bg && bg.length <= 64 && BG_PATTERN.test(bg)) out.bg = bg
 
   return out
+}
+
+/** Short human-readable summary like 「置中 · 前0 後0 · 56px」 for preset lists; empty params → 「沿用控制頁設定」. */
+export function describeObsParams(params: ObsUrlParams): string {
+  const parts: string[] = []
+  if (params.align) parts.push({ left: '靠左', center: '置中', right: '靠右' }[params.align])
+  if (params.before !== undefined || params.after !== undefined) {
+    parts.push(`前${params.before ?? '–'} 後${params.after ?? '–'}`)
+  }
+  if (params.size !== undefined || params.otherSize !== undefined) {
+    parts.push(params.otherSize !== undefined ? `${params.size ?? '–'}/${params.otherSize}px` : `${params.size}px`)
+  }
+  if (params.title === false) parts.push('無歌名')
+  if (params.shadow) parts.push('陰影')
+  if (params.anim === false) parts.push('無動畫')
+  if (params.bg) parts.push(`背景 ${params.bg}`)
+  return parts.length ? parts.join(' · ') : '沿用控制頁設定'
 }
 
 /** Serialise params back into query-string pairs (booleans as 1/0). Undefined keys are skipped. */
