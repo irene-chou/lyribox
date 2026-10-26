@@ -54,6 +54,40 @@ export interface UISettings {
   sidebarWidth: number
 }
 
+export type ObsAlign = 'left' | 'center' | 'right'
+
+/**
+ * URL query parameters understood by `public/obs.html` to override the
+ * appearance of a single OBS browser source (see `lib/obs-params.ts`).
+ */
+export interface ObsUrlParams {
+  /** Horizontal text alignment of the lyrics block. */
+  align?: ObsAlign
+  /** Draw a dark text shadow behind lyrics (helps over bright video). */
+  shadow?: boolean
+  /** Animate size / colour transitions between lines (default on). */
+  anim?: boolean
+  /** Lines shown before the active line (overrides synced visibleBefore). */
+  before?: number
+  /** Lines shown after the active line (overrides synced visibleAfter). */
+  after?: number
+  /** Active line font size in px (overrides synced activeFontSize). */
+  size?: number
+  /** Other lines font size in px (overrides synced otherFontSize). */
+  otherSize?: number
+  /** Show the "Now singing" title block (overrides synced showTitle). */
+  title?: boolean
+  /** CSS colour for the page background (overrides synced lyricsBgColor). */
+  bg?: string
+}
+
+/** A named set of OBS URL params the user can pick when copying the OBS URL. */
+export interface ObsPreset {
+  id: string
+  name: string
+  params: ObsUrlParams
+}
+
 export type Theme = 'light' | 'dark'
 
 export type PlaybackStatus = 'IDLE' | 'PLAYING' | 'PAUSED' | 'ENDED'

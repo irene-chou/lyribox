@@ -1,4 +1,10 @@
-import type { UISettings } from '@/types'
+import type { ObsPreset, UISettings } from '@/types'
+
+/** Seeded once into `useUISettingsStore.obsPresets`; users can edit or delete them. */
+export const DEFAULT_OBS_PRESETS: ObsPreset[] = [
+  { id: 'multi-line', name: '多行歌詞', params: {} },
+  { id: 'subtitle', name: '單行字幕', params: { before: 0, after: 0, size: 56, align: 'center', title: false } },
+]
 
 export const CONTROL_BTN_CLASS =
   'border border-lb-border bg-lb-bg-input text-lb-text-primary hover:bg-lb-bg-card hover:border-lb-text-dim transition-colors cursor-pointer'

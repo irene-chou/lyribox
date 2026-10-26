@@ -29,6 +29,7 @@ src/
     lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
     settings/             # DisplaySettings (collapsible), OBSPreview (embedded obs.html iframe), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl, ObsPresetsDialog (manage OBS URL presets)
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
     song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
@@ -59,6 +60,7 @@ src/
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     obs-state.ts          # buildFullState() — FULL_STATE payload shared by PieSocket broadcast and preview
     obs-preview-bridge.ts # In-page pub/sub mirroring outgoing SyncMessages to the embedded OBS preview
+    piesocket.ts          # Session ID, channel name, OBS URL helpers (buildObsUrl appends preset params)
     obs-params.ts         # parseObsParams(): URL query overrides for obs.html (align/shadow/anim/before/after/size/otherSize/title/bg); obs.html keeps an inline copy
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
@@ -118,6 +120,9 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 - `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change. Display settings go out as a single `SETTINGS_PATCH` carrying only the changed keys of `ObsDisplaySettings` (shallow diff via `lib/obs-settings.ts` `pickObsSettings` / `diffSettings`, debounced 50ms so slider drags coalesce). Adding an OBS-visible setting = add the key to `ObsDisplaySettings` + `OBS_SETTING_KEYS` and handle it in `obs.html` `applySettings`
 - `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect. `FULL_STATE` carries `v: SYNC_PROTOCOL_VERSION` (currently 2) and a nested `settings: ObsDisplaySettings` (also spread at top level for v1 obs pages)
 - **Protocol v1 compatibility:** the per-field types (`FONT_SIZE`, `LYRIC_COLORS`, `TITLE_FONT_SIZE`, `LYRICS_GAP`, `VISIBLE_RANGE`) are `@deprecated`; the app no longer sends them but `obs.html` still accepts them (routed through `applySettings`). Remove both the type variants and the `obs.html` cases in the next release
+- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
+- `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
+- **URL params / presets:** `obs.html` accepts appearance overrides as query params (`lib/obs-params.ts`; params win over synced settings via a single `effective()` step). `useUISettingsStore.obsPresets` holds named param sets (seeded with 多行歌詞 / 單行字幕 from `DEFAULT_OBS_PRESETS`); the Header OBS button is a split button — main part copies the plain URL, the chevron lists presets and opens `ObsPresetsDialog`
 - **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
 - **Preview mode:** `obs.html?preview=1` opens no PieSocket connection; it listens for same-origin `postMessage` from its parent and posts `REQUEST_STATE` on load. `OBSPreview` embeds it in the sidebar (1920×1080 scaled to fit), forwards every message `useOBSSync.broadcast` sends via `lib/obs-preview-bridge.ts`, and answers `REQUEST_STATE` with `buildFullState()`. Works regardless of `obsSyncEnabled`
 - OBS page requests state once per (re)connect (plus bounded retries at 5s/20s if nothing arrived) — no polling while idle. piesocket-js 5.x emits no 'open' event, so reconnects are observed by overriding `channel.onOpen` (`lib/piesocket.ts` `observeReconnects`, same trick inline in `obs.html`)
