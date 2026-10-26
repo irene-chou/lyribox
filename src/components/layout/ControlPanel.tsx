@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { navigateSong } from '@/lib/song-selection'
+import { playlistPosition } from '@/lib/playlist'
 import { shortcutHint } from '@/lib/shortcuts'
 import { ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 import { AudioPlayer } from '../playback/AudioPlayer'
@@ -40,6 +41,11 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
     }))
   )
   const sidebarWidth = useUISettingsStore((s) => s.sidebarWidth)
+  const { playlist, playlistEnabled } = useUISettingsStore(
+    useShallow((s) => ({ playlist: s.playlist, playlistEnabled: s.playlistEnabled })),
+  )
+  const position = playlistEnabled ? playlistPosition(playlist, currentSongId) : null
+  const navOrderHint = playlistEnabled && playlist.length > 0 ? '（歌單順序）' : ''
 
   function handleEdit() {
     if (!currentSongId) return
@@ -110,7 +116,7 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
                   className={navBtnClass}
                   style={navBtnStyle}
                   onClick={() => void navigateSong(-1)}
-                  title={`上一首 ${shortcutHint('prev-song')}`}
+                  title={`上一首${navOrderHint} ${shortcutHint('prev-song')}`}
                   aria-label="上一首"
                 >
                   <ChevronLeft size={14} />
@@ -122,11 +128,20 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
                 >
                   {currentSongTitle}
                 </span>
+                {position !== null && (
+                  <span
+                    className="shrink-0 text-lb-text-secondary"
+                    style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', lineHeight: '28px' }}
+                    title="歌單位置"
+                  >
+                    {position}/{playlist.length}
+                  </span>
+                )}
                 <button
                   className={navBtnClass}
                   style={navBtnStyle}
                   onClick={() => void navigateSong(1)}
-                  title={`下一首 ${shortcutHint('next-song')}`}
+                  title={`下一首${navOrderHint} ${shortcutHint('next-song')}`}
                   aria-label="下一首"
                 >
                   <ChevronRight size={14} />

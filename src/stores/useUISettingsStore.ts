@@ -11,6 +11,14 @@ interface UISettingsState extends UISettings {
    * Until then no PieSocket connection is opened at all. Not part of resetAll.
    */
   obsSyncEnabled: boolean
+  /** Ordered song ids for tonight's set (see lib/playlist.ts). Not part of resetAll. */
+  playlist: number[]
+  /** When on, prev/next (buttons + Cmd+[ ]) follow the playlist instead of library order. */
+  playlistEnabled: boolean
+  /** Auto-load the next playlist song when the current one ends (requires playlistEnabled). */
+  autoNext: boolean
+  /** Whether the 歌單 section in the song drawer is expanded. */
+  playlistOpen: boolean
 
   setActiveFontSize: (size: number) => void
   setOtherFontSize: (size: number) => void
@@ -27,6 +35,10 @@ interface UISettingsState extends UISettings {
   setPersistLocalAudio: (persist: boolean) => void
   setDisplaySettingsOpen: (open: boolean) => void
   setObsSyncEnabled: (enabled: boolean) => void
+  setPlaylist: (ids: number[]) => void
+  setPlaylistEnabled: (enabled: boolean) => void
+  setAutoNext: (enabled: boolean) => void
+  setPlaylistOpen: (open: boolean) => void
   resetAll: () => void
 }
 
@@ -36,6 +48,10 @@ export const useUISettingsStore = create<UISettingsState>()(
       ...DEFAULT_UI_SETTINGS,
       displaySettingsOpen: false,
       obsSyncEnabled: false,
+      playlist: [],
+      playlistEnabled: false,
+      autoNext: false,
+      playlistOpen: true,
 
       setActiveFontSize: (size: number) => set({ activeFontSize: size }),
       setOtherFontSize: (size: number) => set({ otherFontSize: size }),
@@ -52,6 +68,10 @@ export const useUISettingsStore = create<UISettingsState>()(
       setPersistLocalAudio: (persist: boolean) => set({ persistLocalAudio: persist }),
       setDisplaySettingsOpen: (open: boolean) => set({ displaySettingsOpen: open }),
       setObsSyncEnabled: (enabled: boolean) => set({ obsSyncEnabled: enabled }),
+      setPlaylist: (ids: number[]) => set({ playlist: ids }),
+      setPlaylistEnabled: (enabled: boolean) => set({ playlistEnabled: enabled }),
+      setAutoNext: (enabled: boolean) => set({ autoNext: enabled }),
+      setPlaylistOpen: (open: boolean) => set({ playlistOpen: open }),
       resetAll: () => set({ ...DEFAULT_UI_SETTINGS }),
     }),
     {

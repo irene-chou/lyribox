@@ -27,6 +27,8 @@ interface SongState {
   youtubeId: string | null
   audioFileName: string | null
   folderId: number | null
+  /** Title of the next playlist song (derived by useAutoNext); null when playlist mode is off or at the end. */
+  nextSongTitle: string | null
 
   // Saved state for dirty tracking
   lastSavedState: SongSavedState | null
@@ -42,6 +44,7 @@ interface SongState {
   setYoutubeId: (id: string | null) => void
   setAudioFileName: (name: string | null) => void
   setFolderId: (folderId: number | null) => void
+  setNextSongTitle: (title: string | null) => void
   captureState: () => void
   hasUnsavedChanges: () => boolean
 }
@@ -58,6 +61,7 @@ export const useSongStore = create<SongState>((set, get) => ({
   youtubeId: null,
   audioFileName: null,
   folderId: null,
+  nextSongTitle: null,
   lastSavedState: null,
 
   loadSong: (song: Song) => {
@@ -119,6 +123,7 @@ export const useSongStore = create<SongState>((set, get) => ({
   setYoutubeId: (id: string | null) => set({ youtubeId: id }),
   setAudioFileName: (name: string | null) => set({ audioFileName: name }),
   setFolderId: (folderId: number | null) => set({ folderId }),
+  setNextSongTitle: (nextSongTitle: string | null) => set({ nextSongTitle }),
 
   captureState: () => {
     const state = get()

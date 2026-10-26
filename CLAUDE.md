@@ -29,7 +29,7 @@ src/
     lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
-    song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
+    song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection, PlaylistSection (歌單: reorder, 歌單模式, 自動下一首)
     song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
   hooks/
@@ -40,6 +40,7 @@ src/
     useYouTubePlayer.ts   # YouTube IFrame API integration
     useLocalAudioPlayer.ts # HTMLAudioElement wrapper
     useManualTimer.ts     # Manual timer (performance.now()-based, polled by sync engine)
+    useAutoNext.ts        # Playlist glue: derives nextSongTitle for OBS, auto-loads/plays next playlist song on ENDED
     useSongLibrary.ts     # Dexie live query + re-exports song-service functions
     useKeyboardShortcuts.ts # Global keyboard shortcuts (table lives in lib/shortcuts.ts)
     useIsMobile.ts        # matchMedia breakpoint (768px)
@@ -63,6 +64,7 @@ src/
     playback-actions.ts   # adjustOffset/setPitch/etc. — store update + active-line resync + debounced save
     song-selection.ts     # selectSong() (handles local-file prompt), navigateSong(±1), pickLocalAudioFile()
     song-order.ts         # orderSongs() (folders A→Z then uncategorized), adjacentSong()
+    playlist.ts           # Pure playlist helpers (add/remove/move, nextInPlaylist, pruneMissing, playlistPosition)
     utils.ts              # cn() (clsx + tailwind-merge)
     __tests__/            # Unit tests for lrc-parser, format, song-service
   types/
@@ -88,7 +90,7 @@ public/
 ### State Flow
 - `useSongStore` — current song data, lyrics (parsed from lrcText), offset, audio source, dirty tracking via `lastSavedState`
 - `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl
-- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted)
+- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted); also the playlist (`playlist` ids, `playlistEnabled`, `autoNext`, `playlistOpen`), not touched by `resetAll`
 - `useSyncStore` — currentLineIndex (-1 = before first line), isSyncing flag
 
 ### Component Patterns
@@ -112,7 +114,7 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 ### OBS Sync
 - PieSocket WebSocket for real-time sync to `public/obs.html` (standalone OBS browser source)
 - Channel: `lyribox-{sessionId}` where sessionId is stored in `localStorage['lb-session-id']`
-- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
+- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change. `LYRICS_LOADED` / `FULL_STATE` carry `nextSongTitle` (read at send time); mid-song playlist edits send a separate `NEXT_SONG` so the OBS page's active line is not reset
 - `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
 - **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
 - OBS page requests state once per (re)connect (plus bounded retries at 5s/20s if nothing arrived) — no polling while idle. piesocket-js 5.x emits no 'open' event, so reconnects are observed by overriding `channel.onOpen` (`lib/piesocket.ts` `observeReconnects`, same trick inline in `obs.html`)
@@ -124,7 +126,7 @@ Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `
 - `↑/↓` — offset +0.1s / -0.1s (Shift: ±0.5s)
 - `Cmd/Ctrl+↑/↓` — active font size ±2 (clamped 14–60)
 - `Cmd/Ctrl+K` — open song drawer with search focused (Enter loads first match)
-- `Cmd/Ctrl+[` / `]` — previous / next song in library order
+- `Cmd/Ctrl+[` / `]` — previous / next song in library order (playlist order when 歌單模式 is on; `navigateSong` in `lib/song-selection.ts`)
 - `Cmd/Ctrl+S` — save current song
 - `?` — shortcuts dialog, `Escape` — close drawer
 - Skipped when focus is on input/textarea/select/contentEditable or inside an open dialog/drawer

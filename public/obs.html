@@ -93,6 +93,16 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .now-singing-next {
+    display: none;
+    font-weight: 400;
+    font-size: 13px;
+    color: #ffffff;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .waiting {
     display: flex;
@@ -110,6 +120,7 @@
 <div class="now-singing" id="nowSinging">
   <span class="now-singing-label">Now singing</span>
   <span class="now-singing-title" id="nowSingingTitle"></span>
+  <span class="now-singing-next" id="nowSingingNext"></span>
 </div>
 <div class="lyrics-scroll-container" id="lyricsContainer">
   <div class="waiting" id="waitingState">等待控制頁面連線...</div>
@@ -130,6 +141,7 @@
   let passedColor = '#5a5a70';
   let lyricsBgColor = 'transparent';
   let songTitle = '';
+  let nextSongTitle = null;
   let syncChannel = null;
   let gotState = false;
   // After a (re)connect, retry the state request a couple of times if nothing
@@ -160,6 +172,14 @@
       titleEl.textContent = songTitle;
       labelEl.style.fontSize = Math.round(titleFontSize * 0.72) + 'px';
       titleEl.style.fontSize = titleFontSize + 'px';
+      const nextEl = document.getElementById('nowSingingNext');
+      if (nextSongTitle) {
+        nextEl.textContent = '\u4E0B\u4E00\u9996\uFF1A' + nextSongTitle;
+        nextEl.style.fontSize = Math.round(titleFontSize * 0.72) + 'px';
+        nextEl.style.display = 'block';
+      } else {
+        nextEl.style.display = 'none';
+      }
       el.style.display = 'flex';
     } else {
       el.style.display = 'none';
@@ -207,6 +227,7 @@
             passedColor = data.passedColor || '#5a5a70';
             lyricsBgColor = data.lyricsBgColor || 'transparent';
             songTitle = data.songTitle || '';
+            nextSongTitle = data.nextSongTitle || null;
             renderLyrics();
             updateActiveLine();
             updateNowSinging();
@@ -217,7 +238,12 @@
             lyrics = data.lyrics || [];
             currentLineIndex = -1;
             songTitle = data.songTitle || '';
+            nextSongTitle = data.nextSongTitle || null;
             renderLyrics();
+            updateNowSinging();
+            break;
+          case 'NEXT_SONG':
+            nextSongTitle = data.nextSongTitle || null;
             updateNowSinging();
             break;
           case 'SYNC_UPDATE':

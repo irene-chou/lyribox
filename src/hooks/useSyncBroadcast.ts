@@ -11,6 +11,10 @@ interface UseSyncBroadcastOptions {
 // Module-level selectors — stable references that never change
 const selectSyncUpdate = (s: { currentLineIndex: number }) => ({ currentLineIndex: s.currentLineIndex })
 const selectLyricsLoaded = (s: { lyrics: unknown; currentSongTitle: string }) => ({ lyrics: s.lyrics, songTitle: s.currentSongTitle })
+// nextSongTitle rides along with LYRICS_LOADED (read at send time, not a trigger — OBS resets the
+// active line on LYRICS_LOADED) and gets its own NEXT_SONG message when it changes mid-song.
+const extraLyricsLoaded = (s: { nextSongTitle: string | null }) => ({ nextSongTitle: s.nextSongTitle })
+const selectNextSong = (s: { nextSongTitle: string | null }) => ({ nextSongTitle: s.nextSongTitle })
 const selectOffset = (s: { offset: number }) => ({ offset: s.offset })
 const selectFontSize = (s: { activeFontSize: number; otherFontSize: number }) => ({ activeFontSize: s.activeFontSize, otherFontSize: s.otherFontSize })
 const selectTitleFontSize = (s: { titleFontSize: number; showTitle: boolean }) => ({ titleFontSize: s.titleFontSize, showTitle: s.showTitle })
@@ -27,6 +31,8 @@ function useStoreWatcher<T>(
   selector: (state: T) => Record<string, unknown>,
   messageType: SyncMessageType,
   broadcastRef: React.RefObject<(type: SyncMessageType, data: Record<string, unknown>) => void>,
+  /** Extra payload fields read at send time; changes to them alone do not trigger a broadcast. */
+  extra?: (state: T) => Record<string, unknown>,
 ) {
   useEffect(() => {
     let prev = selector(store.getState())
@@ -37,11 +43,11 @@ function useStoreWatcher<T>(
       )
       if (changed) {
         prev = next
-        broadcastRef.current(messageType, next)
+        broadcastRef.current(messageType, extra ? { ...next, ...extra(state) } : next)
       }
     })
     return unsub
-  }, [store, selector, messageType, broadcastRef])
+  }, [store, selector, messageType, broadcastRef, extra])
 }
 
 export function useSyncBroadcast({ broadcast }: UseSyncBroadcastOptions) {
@@ -49,7 +55,8 @@ export function useSyncBroadcast({ broadcast }: UseSyncBroadcastOptions) {
   broadcastRef.current = broadcast
 
   useStoreWatcher(useSyncStore, selectSyncUpdate, 'SYNC_UPDATE', broadcastRef)
-  useStoreWatcher(useSongStore, selectLyricsLoaded, 'LYRICS_LOADED', broadcastRef)
+  useStoreWatcher(useSongStore, selectLyricsLoaded, 'LYRICS_LOADED', broadcastRef, extraLyricsLoaded)
+  useStoreWatcher(useSongStore, selectNextSong, 'NEXT_SONG', broadcastRef)
   useStoreWatcher(useSongStore, selectOffset, 'OFFSET', broadcastRef)
   useStoreWatcher(useUISettingsStore, selectFontSize, 'FONT_SIZE', broadcastRef)
   useStoreWatcher(useUISettingsStore, selectTitleFontSize, 'TITLE_FONT_SIZE', broadcastRef)

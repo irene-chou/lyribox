@@ -68,11 +68,14 @@ export type SyncMessageType =
   | 'LYRICS_GAP'
   | 'VISIBLE_RANGE'
   | 'OFFSET'
+  | 'NEXT_SONG'
   | 'REQUEST_STATE'
 
 export type SyncMessage =
   | { type: 'SYNC_UPDATE'; data: { currentLineIndex: number } }
-  | { type: 'LYRICS_LOADED'; data: { lyrics: LyricLine[]; songTitle: string } }
+  | { type: 'LYRICS_LOADED'; data: { lyrics: LyricLine[]; songTitle: string; nextSongTitle: string | null } }
+  /** Playlist changed mid-song; OBS updates the 「下一首」 line without resetting lyrics. */
+  | { type: 'NEXT_SONG'; data: { nextSongTitle: string | null } }
   | { type: 'OFFSET'; data: { offset: number } }
   | { type: 'FONT_SIZE'; data: { activeFontSize: number; otherFontSize: number } }
   | { type: 'TITLE_FONT_SIZE'; data: { titleFontSize: number; showTitle: boolean } }

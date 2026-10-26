@@ -20,6 +20,8 @@ interface FolderSectionProps {
   onDropSong: (songId: number, folderId: number | null) => void
   onRenameFolder: (folder: FolderType, newName: string) => void
   onDeleteFolder: (folder: FolderType) => void
+  playlistIds?: Set<number>
+  onTogglePlaylist?: (song: Song) => void
 }
 
 export function FolderSection({
@@ -33,6 +35,8 @@ export function FolderSection({
   onDropSong,
   onRenameFolder,
   onDeleteFolder,
+  playlistIds,
+  onTogglePlaylist,
 }: FolderSectionProps) {
   const [expanded, setExpanded] = useState(true)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -237,6 +241,8 @@ export function FolderSection({
                 onSelect={onSelectSong}
                 onDelete={onDeleteSong}
                 onMove={onMoveSong}
+                inPlaylist={playlistIds?.has(song.id)}
+                onTogglePlaylist={onTogglePlaylist}
               />
             ))
           )}
