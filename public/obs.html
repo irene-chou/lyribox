@@ -71,6 +71,16 @@
     letter-spacing: 0.05em;
   }
 
+  /* URL param overrides (see parseObsParams below) */
+  body.shadow .lyric-line,
+  body.shadow .now-singing-title,
+  body.shadow .now-singing-label {
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  body.no-anim .lyric-line {
+    transition: none;
+  }
+
   .now-singing {
     display: none;
     flex-direction: column;
@@ -144,19 +154,67 @@
     }, ms));
   }
 
+  // ========== URL param overrides ==========
+  // Inline copy of src/lib/obs-params.ts `parseObsParams` (this page cannot import
+  // modules). Keep the two in sync. Values here win over synced settings so several
+  // OBS sources on one session can look different.
+  function parseObsParams(search) {
+    const q = new URLSearchParams(search);
+    const out = {};
+    const flag = (v) => (v === '1' || v === 'true') ? true : (v === '0' || v === 'false') ? false : undefined;
+    const int = (v, min, max) => {
+      if (v === null || !/^\d+$/.test(v.trim())) return undefined;
+      const n = Number(v);
+      return n >= min && n <= max ? n : undefined;
+    };
+    const align = q.get('align');
+    if (['left', 'center', 'right'].includes(align)) out.align = align;
+    const shadow = flag(q.get('shadow')); if (shadow !== undefined) out.shadow = shadow;
+    const anim = flag(q.get('anim')); if (anim !== undefined) out.anim = anim;
+    const title = flag(q.get('title')); if (title !== undefined) out.title = title;
+    const before = int(q.get('before'), 0, 50); if (before !== undefined) out.before = before;
+    const after = int(q.get('after'), 0, 50); if (after !== undefined) out.after = after;
+    const size = int(q.get('size'), 8, 300); if (size !== undefined) out.size = size;
+    const otherSize = int(q.get('otherSize'), 8, 300); if (otherSize !== undefined) out.otherSize = otherSize;
+    const bg = (q.get('bg') || '').trim();
+    if (bg && bg.length <= 64 && /^(#[0-9a-f]{3,8}|[a-z]+|(?:rgba?|hsla?)\([\d.,%\s/]+\))$/i.test(bg)) out.bg = bg;
+    return out;
+  }
+
+  const overrides = parseObsParams(window.location.search);
+
+  // Single resolution step: URL override ?? value synced from the control page.
+  // Every render/update path reads through this so overrides survive any sync message.
+  function effective() {
+    return {
+      activeFontSize: overrides.size ?? activeFontSize,
+      otherFontSize: overrides.otherSize ?? otherFontSize,
+      visibleBefore: overrides.before ?? visibleBefore,
+      visibleAfter: overrides.after ?? visibleAfter,
+      showTitle: overrides.title ?? showTitle,
+      lyricsBgColor: overrides.bg ?? lyricsBgColor,
+    };
+  }
+
+  // Static overrides applied once
+  if (overrides.align) document.getElementById('lyricsContainer').style.textAlign = overrides.align;
+  if (overrides.shadow) document.body.classList.add('shadow');
+  if (overrides.anim === false) document.body.classList.add('no-anim');
+
   function applyGap() {
     document.getElementById('lyricsContainer').style.gap = lyricsGap + 'px';
   }
 
   function applyColors() {
-    document.body.style.background = lyricsBgColor === 'transparent' ? 'transparent' : lyricsBgColor;
+    const bg = effective().lyricsBgColor;
+    document.body.style.background = bg === 'transparent' ? 'transparent' : bg;
   }
 
   function updateNowSinging() {
     const el = document.getElementById('nowSinging');
     const titleEl = document.getElementById('nowSingingTitle');
     const labelEl = document.querySelector('.now-singing-label');
-    if (showTitle && songTitle && lyrics.length > 0) {
+    if (effective().showTitle && songTitle && lyrics.length > 0) {
       titleEl.textContent = songTitle;
       labelEl.style.fontSize = Math.round(titleFontSize * 0.72) + 'px';
       titleEl.style.fontSize = titleFontSize + 'px';
@@ -167,8 +225,7 @@
   }
 
   // ========== PieSocket (OBS Sync) ==========
-  const params = new URLSearchParams(window.location.search);
-  const sessionId = params.get('s') || '';
+  const sessionId = new URLSearchParams(window.location.search).get('s') || '';
   const channelName = sessionId ? `lyribox-${sessionId}` : 'lyribox';
 
   const piesocket = new PieSocket.default({
@@ -299,11 +356,12 @@
       return;
     }
 
+    const e = effective();
     lyrics.forEach((item, index) => {
       const div = document.createElement('div');
       div.className = 'lyric-line upcoming';
       div.id = `lyric-${index}`;
-      div.style.fontSize = otherFontSize + 'px';
+      div.style.fontSize = e.otherFontSize + 'px';
       div.style.color = otherColor;
 
       if (item.text === '' || item.text === '//') {
@@ -319,18 +377,19 @@
 
   function updateActiveLine() {
     const lines = document.querySelectorAll('.lyric-line');
-    const lo = currentLineIndex - visibleBefore;
-    const hi = currentLineIndex + visibleAfter;
+    const e = effective();
+    const lo = currentLineIndex - e.visibleBefore;
+    const hi = currentLineIndex + e.visibleAfter;
     lines.forEach((line, i) => {
       line.classList.remove('active', 'next', 'visible');
       if (i < lo || i > hi || currentLineIndex < 0) return;
       if (i === currentLineIndex) {
         line.classList.add('active', 'visible');
-        line.style.fontSize = activeFontSize + 'px';
+        line.style.fontSize = e.activeFontSize + 'px';
         line.style.color = activeColor;
       } else {
         line.classList.add('next', 'visible');
-        line.style.fontSize = otherFontSize + 'px';
+        line.style.fontSize = e.otherFontSize + 'px';
         line.style.color = i < currentLineIndex ? passedColor : otherColor;
       }
     });

@@ -57,6 +57,7 @@ src/
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
     format.ts             # formatTime(), extractVideoId()
     piesocket.ts          # Session ID, channel name, OBS URL helpers
+    obs-params.ts         # parseObsParams(): URL query overrides for obs.html (align/shadow/anim/before/after/size/otherSize/title/bg); obs.html keeps an inline copy
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
     analytics.ts          # track(event, data) → Umami custom events; no-op unless Umami is injected. Sends song title / youtube id, never lyrics or local file names
