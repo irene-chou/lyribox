@@ -146,7 +146,11 @@ export function useLocalAudioPlayer() {
     const original = originalChannelsRef.current
     if (!original) return null
     if (!vocalRemoval) return original
-    if (!sideChannelsRef.current) sideChannelsRef.current = removeCenterChannel(original)
+    if (!sideChannelsRef.current) {
+      // decodeAudioData resamples to the context rate
+      const sampleRate = audioCtxRef.current?.sampleRate ?? 44100
+      sideChannelsRef.current = removeCenterChannel(original, sampleRate)
+    }
     return sideChannelsRef.current
   }, [])
 
