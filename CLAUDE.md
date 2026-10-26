@@ -168,16 +168,19 @@ Dexie v4 (IndexedDB wrapper):
 ## Testing
 
 ### Unit Tests (Vitest + jsdom)
-- Located in `src/lib/__tests__/`
-- Tests: `lrc-parser.test.ts` (14 tests), `format.test.ts` (17 tests), `song-service.test.ts` (5 tests)
+- Located in `__tests__/` folders next to the code: `src/lib/__tests__/`, `src/stores/__tests__/`, `src/hooks/__tests__/`, `src/components/__tests__/`
+- `lib`: parser, format, lyrics-sync, song-service (validation with a mocked db in `song-service.test.ts`; CRUD/folders/export against fake-indexeddb in `song-service.db.test.ts`), db schema upgrades, song-order / song-selection, playback-actions, piesocket, lrclib, analytics, shortcuts, stretch-player
+- `stores`: every Zustand store (dirty tracking, persist, save status, dialogs, toasts)
+- `hooks`: sync engine (Worker stubbed), sync broadcast, OBS sync (PieSocket stubbed), keyboard shortcuts, playback engine routing, manual timer, local audio restore, isMobile
+- `components`: small presentational pieces (LyricLine, NowSinging, EmptyState, SaveStatusIndicator, ShortcutsDialog) via `@testing-library/react`
+- IndexedDB tests import `fake-indexeddb/auto` first; files that need a pristine database (schema upgrade) live in their own test file
 - Setup: `src/test/setup.ts` (imports `@testing-library/jest-dom/vitest`)
-- Run: `npm run test` (watch) or `npm run test:run` (CI)
+- Run: `npm run test` (watch), `npm run test:run` (CI), `npm run test:coverage` (v8; `vitest.config.ts` excludes entry points, types and vendored `components/ui`)
 
 ### E2E Tests (Playwright)
-- Located in `e2e/app.spec.ts`
+- Located in `e2e/app.spec.ts` (loading, theme, drawer, modal, create-and-load, Space/?/Cmd+K, undo toast) and `e2e/shortcuts.spec.ts` (Cmd+[ / ] and prev/next buttons, offset ↑/↓ + auto-save status, export download, OBS URL copy, shortcuts dialog)
 - Targets: Chromium (Desktop Chrome)
 - Base URL: `http://localhost:4173` (Vite preview server)
-- Tests: app loading, theme toggle, song drawer, song modal, create-and-load flow
 - Run: `npm run test:e2e` or `npm run test:e2e:ui`
 
 ## Environment Variables

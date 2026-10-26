@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
 import { db } from '@/lib/db'
 import { saveAudioFile } from '@/lib/audio-file-store'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useSongStore } from '@/stores/useSongStore'
-import { restoreLocalAudio } from '../useLocalAudioRestore'
+import { restoreLocalAudio, useLocalAudioRestore } from '../useLocalAudioRestore'
 
 beforeEach(async () => {
   await db.audioFiles.clear()
@@ -39,5 +40,34 @@ describe('restoreLocalAudio', () => {
 
     expect(await pending).toBe(false)
     expect(usePlaybackStore.getState().audioFileObjectUrl).toBeNull()
+  })
+})
+
+describe('useLocalAudioRestore (hook)', () => {
+  it('restores the stored file when a local song without audio becomes current', async () => {
+    await saveAudioFile(5, new File(['x'], 'song.mp3', { type: 'audio/mpeg' }))
+    useSongStore.setState({ currentSongId: null, audioSource: 'local' })
+    renderHook(() => useLocalAudioRestore())
+    expect(usePlaybackStore.getState().audioFileObjectUrl).toBeNull()
+
+    await act(async () => {
+      useSongStore.setState({ currentSongId: 5 })
+      await vi.waitFor(() => expect(usePlaybackStore.getState().audioFileObjectUrl).toBe('blob:restored'))
+    })
+  })
+
+  it('does nothing for YouTube songs or when audio is already loaded', async () => {
+    await saveAudioFile(5, new File(['x'], 'song.mp3', { type: 'audio/mpeg' }))
+    useSongStore.setState({ currentSongId: 5, audioSource: 'youtube' })
+    renderHook(() => useLocalAudioRestore())
+    await act(() => new Promise((r) => setTimeout(r, 20)))
+    expect(usePlaybackStore.getState().audioFileObjectUrl).toBeNull()
+
+    await act(async () => {
+      usePlaybackStore.setState({ audioFileObjectUrl: 'blob:already' })
+      useSongStore.setState({ audioSource: 'local' })
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(usePlaybackStore.getState().audioFileObjectUrl).toBe('blob:already')
   })
 })
