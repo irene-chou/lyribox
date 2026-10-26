@@ -31,6 +31,8 @@ src/
     settings/             # DisplaySettings (collapsible), OBSPreview (embedded obs.html iframe), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl, ObsPresetsDialog (manage OBS URL presets)
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
+    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection, PlaylistSection (歌單: reorder, 歌單模式, 自動下一首)
     song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
   hooks/
@@ -41,6 +43,7 @@ src/
     useYouTubePlayer.ts   # YouTube IFrame API integration
     useLocalAudioPlayer.ts # HTMLAudioElement wrapper
     useManualTimer.ts     # Manual timer (performance.now()-based, polled by sync engine)
+    useAutoNext.ts        # Playlist glue: derives nextSongTitle for OBS, auto-loads/plays next playlist song on ENDED
     useSongLibrary.ts     # Dexie live query + re-exports song-service functions
     useKeyboardShortcuts.ts # Global keyboard shortcuts (table lives in lib/shortcuts.ts)
     useIsMobile.ts        # matchMedia breakpoint (768px)
@@ -68,6 +71,7 @@ src/
     playback-actions.ts   # adjustOffset/setPitch/etc. — store update + active-line resync + debounced save
     song-selection.ts     # selectSong() (handles local-file prompt), navigateSong(±1), pickLocalAudioFile()
     song-order.ts         # orderSongs() (folders A→Z then uncategorized), adjacentSong()
+    playlist.ts           # Pure playlist helpers (add/remove/move, nextInPlaylist, pruneMissing, playlistPosition)
     utils.ts              # cn() (clsx + tailwind-merge)
     __tests__/            # Unit tests for lrc-parser, format, song-service
   types/
@@ -94,6 +98,7 @@ public/
 - `useSongStore` — current song data, lyrics (parsed from lrcText), offset, audio source, dirty tracking via `lastSavedState`
 - `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl
 - `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen`, `obsPreviewOpen` (all persisted)
+- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted); also the playlist (`playlist` ids, `playlistEnabled`, `autoNext`, `playlistOpen`), not touched by `resetAll`
 - `useSyncStore` — currentLineIndex (-1 = before first line), isSyncing flag
 
 ### Component Patterns
@@ -121,6 +126,7 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 - `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect. `FULL_STATE` carries `v: SYNC_PROTOCOL_VERSION` (currently 2) and a nested `settings: ObsDisplaySettings` (also spread at top level for v1 obs pages)
 - **Protocol v1 compatibility:** the per-field types (`FONT_SIZE`, `LYRIC_COLORS`, `TITLE_FONT_SIZE`, `LYRICS_GAP`, `VISIBLE_RANGE`) are `@deprecated`; the app no longer sends them but `obs.html` still accepts them (routed through `applySettings`). Remove both the type variants and the `obs.html` cases in the next release
 - `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
+- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change. `LYRICS_LOADED` / `FULL_STATE` carry `nextSongTitle` (read at send time); mid-song playlist edits send a separate `NEXT_SONG` so the OBS page's active line is not reset
 - `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
 - **URL params / presets:** `obs.html` accepts appearance overrides as query params (`lib/obs-params.ts`; params win over synced settings via a single `effective()` step). `useUISettingsStore.obsPresets` holds named param sets (seeded with 多行歌詞 / 單行字幕 from `DEFAULT_OBS_PRESETS`); the Header OBS button is a split button — main part copies the plain URL, the chevron lists presets and opens `ObsPresetsDialog`
 - **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
@@ -134,7 +140,7 @@ Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `
 - `↑/↓` — offset +0.1s / -0.1s (Shift: ±0.5s)
 - `Cmd/Ctrl+↑/↓` — active font size ±2 (clamped 14–60)
 - `Cmd/Ctrl+K` — open song drawer with search focused (Enter loads first match)
-- `Cmd/Ctrl+[` / `]` — previous / next song in library order
+- `Cmd/Ctrl+[` / `]` — previous / next song in library order (playlist order when 歌單模式 is on; `navigateSong` in `lib/song-selection.ts`)
 - `Cmd/Ctrl+S` — save current song
 - `?` — shortcuts dialog, `Escape` — close drawer
 - Skipped when focus is on input/textarea/select/contentEditable or inside an open dialog/drawer

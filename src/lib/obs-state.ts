@@ -21,6 +21,7 @@ export function buildFullState(): Record<string, unknown> {
     songTitle: song.currentSongTitle,
     currentLineIndex: sync.currentLineIndex,
     offset: song.offset,
+    nextSongTitle: song.nextSongTitle,
     settings,
     // Settings also spread at top level so a v1 obs.html still renders correctly.
     ...settings,

@@ -18,6 +18,14 @@ interface UISettingsState extends UISettings {
   obsSyncEnabled: boolean
   /** Whether the embedded "OBS 預覽" panel in the sidebar is expanded (not part of resetAll). */
   obsPreviewOpen: boolean
+  /** Ordered song ids for tonight's set (see lib/playlist.ts). Not part of resetAll. */
+  playlist: number[]
+  /** When on, prev/next (buttons + Cmd+[ ]) follow the playlist instead of library order. */
+  playlistEnabled: boolean
+  /** Auto-load the next playlist song when the current one ends (requires playlistEnabled). */
+  autoNext: boolean
+  /** Whether the 歌單 section in the song drawer is expanded. */
+  playlistOpen: boolean
 
   setActiveFontSize: (size: number) => void
   setOtherFontSize: (size: number) => void
@@ -35,6 +43,10 @@ interface UISettingsState extends UISettings {
   setDisplaySettingsOpen: (open: boolean) => void
   setObsSyncEnabled: (enabled: boolean) => void
   setObsPreviewOpen: (open: boolean) => void
+  setPlaylist: (ids: number[]) => void
+  setPlaylistEnabled: (enabled: boolean) => void
+  setAutoNext: (enabled: boolean) => void
+  setPlaylistOpen: (open: boolean) => void
   resetAll: () => void
 }
 
@@ -59,6 +71,10 @@ export const useUISettingsStore = create<UISettingsState>()(
       updateObsPreset: (id, patch) =>
         set((s) => ({ obsPresets: s.obsPresets.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
       removeObsPreset: (id) => set((s) => ({ obsPresets: s.obsPresets.filter((p) => p.id !== id) })),
+      playlist: [],
+      playlistEnabled: false,
+      autoNext: false,
+      playlistOpen: true,
 
       setActiveFontSize: (size: number) => set({ activeFontSize: size }),
       setOtherFontSize: (size: number) => set({ otherFontSize: size }),
@@ -76,6 +92,10 @@ export const useUISettingsStore = create<UISettingsState>()(
       setDisplaySettingsOpen: (open: boolean) => set({ displaySettingsOpen: open }),
       setObsSyncEnabled: (enabled: boolean) => set({ obsSyncEnabled: enabled }),
       setObsPreviewOpen: (open: boolean) => set({ obsPreviewOpen: open }),
+      setPlaylist: (ids: number[]) => set({ playlist: ids }),
+      setPlaylistEnabled: (enabled: boolean) => set({ playlistEnabled: enabled }),
+      setAutoNext: (enabled: boolean) => set({ autoNext: enabled }),
+      setPlaylistOpen: (open: boolean) => set({ playlistOpen: open }),
       resetAll: () => set({ ...DEFAULT_UI_SETTINGS }),
     }),
     {

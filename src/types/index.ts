@@ -117,6 +117,7 @@ export type SyncMessageType =
   | 'SYNC_UPDATE'
   | 'SETTINGS_PATCH'
   | 'OFFSET'
+  | 'NEXT_SONG'
   | 'REQUEST_STATE'
   // Deprecated per-field settings types (protocol v1). The app no longer sends
   // them; obs.html still accepts them for one release. Remove in the next version.
@@ -132,12 +133,15 @@ export interface FullStateData extends ObsDisplaySettings {
   songTitle: string
   currentLineIndex: number
   offset: number
+  nextSongTitle: string | null
   settings: ObsDisplaySettings
 }
 
 export type SyncMessage =
   | { type: 'SYNC_UPDATE'; data: { currentLineIndex: number } }
-  | { type: 'LYRICS_LOADED'; data: { lyrics: LyricLine[]; songTitle: string } }
+  | { type: 'LYRICS_LOADED'; data: { lyrics: LyricLine[]; songTitle: string; nextSongTitle: string | null } }
+  /** Playlist changed mid-song; OBS updates the 「下一首」 line without resetting lyrics. */
+  | { type: 'NEXT_SONG'; data: { nextSongTitle: string | null } }
   | { type: 'OFFSET'; data: { offset: number } }
   | { type: 'SETTINGS_PATCH'; data: Partial<ObsDisplaySettings> }
   | { type: 'FULL_STATE'; data: FullStateData }

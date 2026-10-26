@@ -11,6 +11,7 @@ import { SongSearchInput } from './SongSearchInput'
 import { SongListItem } from './SongListItem'
 import { SongDrawerMenu } from './SongDrawerMenu'
 import { FolderSection } from './FolderSection'
+import { PlaylistSection } from './PlaylistSection'
 import {
   useSongs,
   useFolders,
@@ -23,10 +24,12 @@ import {
   moveSongToFolder,
 } from '@/hooks/useSongLibrary'
 import { useSongStore } from '@/stores/useSongStore'
+import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { confirmDialog, promptDialog } from '@/stores/useDialogStore'
 import { toast } from '@/stores/useToastStore'
 import { getAudioFile, restoreAudioFile } from '@/lib/audio-file-store'
 import { selectSong } from '@/lib/song-selection'
+import { togglePlaylist, pruneMissing } from '@/lib/playlist'
 import { ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 import type { Song, Folder } from '@/types'
 
@@ -42,7 +45,24 @@ export function SongDrawer({ open, onOpenChange, onNewSong, isMobile }: SongDraw
   const songs = useSongs()
   const folders = useFolders()
   const currentSongId = useSongStore((s) => s.currentSongId)
+  const playlist = useUISettingsStore((s) => s.playlist)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  const playlistIds = useMemo(() => new Set(playlist), [playlist])
+
+  // Drop playlist entries whose song was deleted (e.g. via a different tab)
+  useEffect(() => {
+    if (!songs) return
+    const pruned = pruneMissing(playlist, songs)
+    if (pruned !== playlist) useUISettingsStore.getState().setPlaylist(pruned)
+  }, [songs, playlist])
+
+  const handleTogglePlaylist = useCallback((song: Song) => {
+    const ui = useUISettingsStore.getState()
+    const wasIn = ui.playlist.includes(song.id)
+    ui.setPlaylist(togglePlaylist(ui.playlist, song.id))
+    toast.success(wasIn ? `已從歌單移出「${song.name}」` : `已加入歌單「${song.name}」`)
+  }, [])
 
   // Uncategorized section drag-over state
   const [unfolderDragOver, setUnfolderDragOver] = useState(false)
@@ -257,6 +277,8 @@ export function SongDrawer({ open, onOpenChange, onNewSong, isMobile }: SongDraw
                       onSelect={handleSelect}
                       onDelete={handleDelete}
                       onMove={handleMove}
+                      inPlaylist={playlistIds.has(song.id)}
+                      onTogglePlaylist={handleTogglePlaylist}
                     />
                   ))}
                 </>
@@ -264,6 +286,8 @@ export function SongDrawer({ open, onOpenChange, onNewSong, isMobile }: SongDraw
             ) : (
               // Grouped view
               <>
+                <PlaylistSection songs={songs} currentSongId={currentSongId} onSelectSong={handleSelect} />
+
                 {folderList.map((folder) => (
                   <FolderSection
                     key={folder.id}
@@ -277,6 +301,8 @@ export function SongDrawer({ open, onOpenChange, onNewSong, isMobile }: SongDraw
                     onDropSong={handleDropSong}
                     onRenameFolder={handleRenameFolder}
                     onDeleteFolder={handleDeleteFolder}
+                    playlistIds={playlistIds}
+                    onTogglePlaylist={handleTogglePlaylist}
                   />
                 ))}
 
@@ -325,6 +351,8 @@ export function SongDrawer({ open, onOpenChange, onNewSong, isMobile }: SongDraw
                         onSelect={handleSelect}
                         onDelete={handleDelete}
                         onMove={handleMove}
+                        inPlaylist={playlistIds.has(song.id)}
+                        onTogglePlaylist={handleTogglePlaylist}
                       />
                     ))}
 
@@ -345,6 +373,8 @@ export function SongDrawer({ open, onOpenChange, onNewSong, isMobile }: SongDraw
                     onSelect={handleSelect}
                     onDelete={handleDelete}
                     onMove={handleMove}
+                    inPlaylist={playlistIds.has(song.id)}
+                    onTogglePlaylist={handleTogglePlaylist}
                   />
                 ))}
 

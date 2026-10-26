@@ -13,7 +13,7 @@ import type { SyncMessage, SyncMessageType } from '@/types'
 
 const VALID_SYNC_TYPES = new Set<string>([
   'FULL_STATE', 'LYRICS_LOADED', 'SYNC_UPDATE', 'SETTINGS_PATCH',
-  'OFFSET', 'REQUEST_STATE',
+  'OFFSET', 'NEXT_SONG', 'REQUEST_STATE',
   // deprecated protocol v1 types, still accepted
   'FONT_SIZE', 'LYRIC_COLORS', 'TITLE_FONT_SIZE', 'LYRICS_GAP', 'VISIBLE_RANGE',
 ])

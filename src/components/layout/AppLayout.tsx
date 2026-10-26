@@ -8,6 +8,7 @@ import { useSyncEngine } from '@/hooks/useSyncEngine'
 import { useOBSSync } from '@/hooks/useOBSSync'
 import { useSyncBroadcast } from '@/hooks/useSyncBroadcast'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { useAutoNext } from '@/hooks/useAutoNext'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { useSongStore } from '@/stores/useSongStore'
 import { usePlaybackStore } from '@/stores/usePlaybackStore'
@@ -42,6 +43,9 @@ export function AppLayout() {
   // OBS sync — PieSocket broadcast
   const { broadcast } = useOBSSync()
   useSyncBroadcast({ broadcast })
+
+  // Playlist: 「下一首」 title for OBS + auto-advance when a song ends
+  useAutoNext(engine)
 
   const handleOpenDrawer = useCallback(() => {
     setDrawerMounted(true)
