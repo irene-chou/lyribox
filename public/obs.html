@@ -71,6 +71,11 @@
     letter-spacing: 0.05em;
   }
 
+  /* Enhanced LRC word fill: dimmed base + clipped overlay in the active color */
+  .lyric-word { position: relative; display: inline-block; white-space: pre; }
+  .lyric-word-base { opacity: 0.6; }
+  .lyric-word-fill { position: absolute; inset: 0; clip-path: inset(0 100% 0 0); }
+
   .lyric-sub {
     font-size: 0.6em;
     font-weight: 400;
@@ -139,6 +144,11 @@
   let passedColor = '#5a5a70';
   let lyricsBgColor = 'transparent';
   let songTitle = '';
+  // Word-level timing: last offset-applied time from the control page and when it arrived
+  let syncTime = null;
+  let syncPerf = 0;
+  let wordRaf = null;
+  const MAX_EXTRAPOLATION_S = 0.3;
   let syncChannel = null;
   let gotState = false;
   // After a (re)connect, retry the state request a couple of times if nothing
@@ -216,6 +226,7 @@
             passedColor = data.passedColor || '#5a5a70';
             lyricsBgColor = data.lyricsBgColor || 'transparent';
             songTitle = data.songTitle || '';
+            syncTime = null;
             renderLyrics();
             updateActiveLine();
             updateNowSinging();
@@ -225,15 +236,21 @@
           case 'LYRICS_LOADED':
             lyrics = data.lyrics || [];
             currentLineIndex = -1;
+            syncTime = null;
             songTitle = data.songTitle || '';
             renderLyrics();
             updateNowSinging();
             break;
           case 'SYNC_UPDATE':
+            if (typeof data.currentTime === 'number') {
+              syncTime = data.currentTime;
+              syncPerf = performance.now();
+            }
             if (data.currentLineIndex !== currentLineIndex) {
               currentLineIndex = data.currentLineIndex;
               updateActiveLine();
             }
+            ensureWordLoop();
             break;
           case 'FONT_SIZE':
             activeFontSize = data.activeFontSize;
@@ -319,7 +336,11 @@
         div.classList.add('interlude');
         div.appendChild(document.createTextNode('\u9593\u594F'));
       } else {
-        div.appendChild(document.createTextNode(item.text));
+        const textEl = document.createElement('span');
+        textEl.className = 'lyric-text';
+        textEl.textContent = item.text;
+        textEl.dataset.mode = 'plain';
+        div.appendChild(textEl);
         if (item.subText) {
           const sub = document.createElement('div');
           sub.className = 'lyric-sub';
@@ -332,14 +353,99 @@
     });
   }
 
+  function hasWords(item) {
+    return !!(item && item.words && item.words.length > 0);
+  }
+
+  // Active line with Enhanced LRC words → per-word spans; otherwise plain text.
+  function setLineContent(lineEl, item, active) {
+    const textEl = lineEl.querySelector('.lyric-text');
+    if (!textEl) return;
+    if (active && hasWords(item)) {
+      if (textEl.dataset.mode !== 'words') {
+        textEl.textContent = '';
+        item.words.forEach((w) => {
+          const word = document.createElement('span');
+          word.className = 'lyric-word';
+          const base = document.createElement('span');
+          base.className = 'lyric-word-base';
+          base.textContent = w.text;
+          const fill = document.createElement('span');
+          fill.className = 'lyric-word-fill';
+          fill.setAttribute('aria-hidden', 'true');
+          fill.textContent = w.text;
+          word.appendChild(base);
+          word.appendChild(fill);
+          textEl.appendChild(word);
+        });
+        textEl.dataset.mode = 'words';
+      }
+      textEl.querySelectorAll('.lyric-word-base').forEach((el) => { el.style.color = otherColor; });
+      textEl.querySelectorAll('.lyric-word-fill').forEach((el) => { el.style.color = activeColor; });
+    } else if (textEl.dataset.mode !== 'plain') {
+      textEl.textContent = item.text;
+      textEl.dataset.mode = 'plain';
+    }
+  }
+
+  function findActiveWordIndex(words, t) {
+    let idx = -1;
+    for (let i = 0; i < words.length; i++) {
+      if (words[i].time <= t) idx = i; else break;
+    }
+    return idx;
+  }
+
+  function wordProgress(words, index, t, endTime) {
+    const word = words[index];
+    if (!word) return 0;
+    const end = index + 1 < words.length ? words[index + 1].time : endTime;
+    if (end === undefined || end <= word.time) return 1;
+    const p = (t - word.time) / (end - word.time);
+    return p < 0 ? 0 : p > 1 ? 1 : p;
+  }
+
+  function ensureWordLoop() {
+    if (wordRaf !== null) return;
+    const item = lyrics[currentLineIndex];
+    if (!hasWords(item) || syncTime === null) return;
+    wordRaf = requestAnimationFrame(wordFrame);
+  }
+
+  function wordFrame() {
+    wordRaf = null;
+    const item = lyrics[currentLineIndex];
+    if (!hasWords(item) || syncTime === null) return;
+    const lineEl = document.getElementById(`lyric-${currentLineIndex}`);
+    if (!lineEl) return;
+
+    // Extrapolate between 80ms ticks; freeze if updates stop (paused / stalled)
+    const extra = Math.min((performance.now() - syncPerf) / 1000, MAX_EXTRAPOLATION_S);
+    const t = syncTime + extra;
+    const endTime = item.endTime !== undefined ? item.endTime : (lyrics[currentLineIndex + 1] || {}).time;
+    const idx = findActiveWordIndex(item.words, t);
+    const progress = idx >= 0 ? wordProgress(item.words, idx, t, endTime) : 0;
+
+    const fills = lineEl.querySelectorAll('.lyric-word-fill');
+    fills.forEach((el, i) => {
+      const clip = i < idx ? 0 : i > idx ? 100 : (1 - progress) * 100;
+      const next = `inset(0 ${clip}% 0 0)`;
+      if (el.style.clipPath !== next) el.style.clipPath = next;
+    });
+
+    wordRaf = requestAnimationFrame(wordFrame);
+  }
+
   function updateActiveLine() {
     const lines = document.querySelectorAll('.lyric-line');
     const lo = currentLineIndex - visibleBefore;
     const hi = currentLineIndex + visibleAfter;
     lines.forEach((line, i) => {
       line.classList.remove('active', 'next', 'visible');
+      const isActive = i === currentLineIndex;
+      setLineContent(line, lyrics[i], isActive);
       if (i < lo || i > hi || currentLineIndex < 0) return;
-      if (i === currentLineIndex) {
+      if (isActive) {
         line.classList.add('active', 'visible');
         line.style.fontSize = activeFontSize + 'px';
         line.style.color = activeColor;

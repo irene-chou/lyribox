@@ -56,9 +56,18 @@ export function useSyncEngine({ getCurrentTime }: UseSyncEngineOptions) {
 
       const newIndex = findActiveLineIndex(lyrics, currentTime)
 
-      const prevIndex = useSyncStore.getState().currentLineIndex
-      if (newIndex !== prevIndex) {
-        useSyncStore.getState().setCurrentLineIndex(newIndex)
+      const sync = useSyncStore.getState()
+      if (newIndex !== sync.currentLineIndex) {
+        sync.setCurrentLineIndex(newIndex)
+      }
+
+      // Word-level timing needs the time itself, not just the line index.
+      // Only publish it while the active line has words to keep OBS traffic low.
+      const hasWords = newIndex >= 0 && (lyrics[newIndex].words?.length ?? 0) > 0
+      if (hasWords) {
+        sync.setSyncTime(currentTime)
+      } else if (sync.syncTime !== null) {
+        sync.setSyncTime(null)
       }
     }
 

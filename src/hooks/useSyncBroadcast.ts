@@ -9,7 +9,10 @@ interface UseSyncBroadcastOptions {
 }
 
 // Module-level selectors — stable references that never change
-const selectSyncUpdate = (s: { currentLineIndex: number }) => ({ currentLineIndex: s.currentLineIndex })
+const selectSyncUpdate = (s: { currentLineIndex: number; syncTime: number | null }) =>
+  s.syncTime === null
+    ? { currentLineIndex: s.currentLineIndex }
+    : { currentLineIndex: s.currentLineIndex, currentTime: s.syncTime }
 const selectLyricsLoaded = (s: { lyrics: unknown; currentSongTitle: string }) => ({ lyrics: s.lyrics, songTitle: s.currentSongTitle })
 const selectOffset = (s: { offset: number }) => ({ offset: s.offset })
 const selectFontSize = (s: { activeFontSize: number; otherFontSize: number }) => ({ activeFontSize: s.activeFontSize, otherFontSize: s.otherFontSize })

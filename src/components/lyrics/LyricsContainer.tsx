@@ -108,6 +108,9 @@ export function LyricsContainer({ onSeekToLyric, isMobile }: LyricsContainerProp
     })
   }, [lyrics, currentLineIndex])
 
+  // Word timing falls back to the next line's start when a line has no end tag
+  const lineEnds = useMemo(() => lyrics.map((_, i) => lyrics[i + 1]?.time), [lyrics])
+
   // Stable per-line ref setters — only rebuilt when lyrics array changes (useMemo so available during render)
   const lineRefSetters = useMemo(() => {
     lineRefs.current = new Array(lyrics.length).fill(null)
@@ -155,6 +158,7 @@ export function LyricsContainer({ onSeekToLyric, isMobile }: LyricsContainerProp
                 ref={lineRefSetters[i]}
                 line={line}
                 status={statuses[i]}
+                lineEnd={lineEnds[i]}
                 activeFontSize={activeFontSize}
                 otherFontSize={otherFontSize}
                 activeColor={activeColor}

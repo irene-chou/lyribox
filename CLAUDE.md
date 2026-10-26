@@ -26,7 +26,7 @@ src/
   index.css               # Global CSS, theme tokens, shadcn overrides
   components/
     layout/               # AppLayout (sidebar resize, mobile overlay), Header, ControlPanel, SaveStatusIndicator, ShortcutsDialog
-    lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
+    lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), WordLine (Enhanced LRC word fill, rAF-driven clip-path on the active line), NowSinging, EmptyState
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
@@ -54,7 +54,7 @@ src/
   lib/
     db.ts                 # Dexie instance ('lyribox-db', songs table)
     song-service.ts       # CRUD, export/import, validation for songs
-    lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization)
+    lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization, Enhanced LRC `<mm:ss.xx>` word tags → `words` / `endTime`)
     format.ts             # formatTime(), extractVideoId()
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
@@ -89,7 +89,7 @@ public/
 - `useSongStore` — current song data, lyrics (parsed from lrcText), offset, audio source, dirty tracking via `lastSavedState`
 - `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl
 - `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted)
-- `useSyncStore` — currentLineIndex (-1 = before first line), isSyncing flag
+- `useSyncStore` — currentLineIndex (-1 = before first line), syncTime (offset-applied time, non-null only on word-timed lines), isSyncing flag
 
 ### Component Patterns
 - `memo` + `forwardRef` on performance-critical components (`LyricLine`, `NowSinging`, `ManualTimerPanel`, `SongListItem`)
@@ -113,6 +113,7 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 - PieSocket WebSocket for real-time sync to `public/obs.html` (standalone OBS browser source)
 - Channel: `lyribox-{sessionId}` where sessionId is stored in `localStorage['lb-session-id']`
 - `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
+- `SYNC_UPDATE` carries `currentTime` (offset-applied) only while the active line has word timing (`useSyncStore.syncTime`, set per 80ms tick by `useSyncEngine`); `obs.html` animates the word fill with a rAF loop that extrapolates up to 0.3s between ticks
 - `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
 - **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
 - OBS page requests state once per (re)connect (plus bounded retries at 5s/20s if nothing arrived) — no polling while idle. piesocket-js 5.x emits no 'open' event, so reconnects are observed by overriding `channel.onOpen` (`lib/piesocket.ts` `observeReconnects`, same trick inline in `obs.html`)
