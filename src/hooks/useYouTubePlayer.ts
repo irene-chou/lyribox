@@ -54,6 +54,31 @@ export function useYouTubePlayer() {
     }
   }, [])
 
+  /** Push the store's volume / muted state into the iframe player. */
+  const applyVolume = useCallback((p: YT.Player) => {
+    const { volume, muted } = usePlaybackStore.getState()
+    try {
+      p.setVolume(volume)
+      if (muted) p.mute()
+      else p.unMute()
+    } catch (e) {
+      console.debug('YT volume:', e)
+    }
+  }, [])
+
+  // Volume slider / mute button in the TransportBar drive the YouTube player too
+  useEffect(() => {
+    let prevVolume = usePlaybackStore.getState().volume
+    let prevMuted = usePlaybackStore.getState().muted
+    const unsub = usePlaybackStore.subscribe((state) => {
+      if (state.volume === prevVolume && state.muted === prevMuted) return
+      prevVolume = state.volume
+      prevMuted = state.muted
+      if (playerRef.current && isReadyRef.current) applyVolume(playerRef.current)
+    })
+    return unsub
+  }, [applyVolume])
+
   const createPlayer = useCallback(
     (videoId: string) => {
       if (!containerRef.current) return
@@ -93,6 +118,7 @@ export function useYouTubePlayer() {
             const p = playerRef.current
             if (p) {
               usePlaybackStore.getState().setDuration(p.getDuration())
+              applyVolume(p)
             }
           },
           onStateChange: (event: YT.OnStateChangeEvent) => {
@@ -134,7 +160,7 @@ export function useYouTubePlayer() {
         },
       })
     },
-    [],
+    [applyVolume],
   )
 
   const loadVideo = useCallback(
