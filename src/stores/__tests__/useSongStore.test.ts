@@ -10,6 +10,7 @@ const song: Song = {
   lrcText: '[00:02.00]second\n[00:01.00]first',
   offset: 0.5,
   pitch: 2,
+  vocalRemoval: false,
   audioSource: 'youtube',
   youtubeId: 'abc',
   audioFileName: null,
@@ -43,6 +44,22 @@ describe('useSongStore', () => {
     const legacy = { ...song, pitch: undefined } as unknown as Song
     useSongStore.getState().loadSong(legacy)
     expect(useSongStore.getState().pitch).toBe(0)
+  })
+
+  it('defaults vocalRemoval to false for songs saved before it existed', () => {
+    const legacy = { ...song, vocalRemoval: undefined } as unknown as Song
+    useSongStore.getState().loadSong(legacy)
+    expect(useSongStore.getState().vocalRemoval).toBe(false)
+    expect(useSongStore.getState().hasUnsavedChanges()).toBe(false)
+  })
+
+  it('tracks vocalRemoval as an unsaved change', () => {
+    useSongStore.getState().loadSong(song)
+    useSongStore.getState().setVocalRemoval(true)
+    expect(useSongStore.getState().vocalRemoval).toBe(true)
+    expect(useSongStore.getState().hasUnsavedChanges()).toBe(true)
+    useSongStore.getState().captureState()
+    expect(useSongStore.getState().hasUnsavedChanges()).toBe(false)
   })
 
   it('has no unsaved changes right after loading', () => {

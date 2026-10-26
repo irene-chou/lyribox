@@ -9,6 +9,7 @@ interface SongSavedState {
   lrcText: string
   offset: number
   pitch: number
+  vocalRemoval: boolean
   audioSource: AudioSource
   youtubeId: string | null
   audioFileName: string | null
@@ -22,6 +23,7 @@ interface SongState {
   lyrics: LyricLine[]
   offset: number
   pitch: number
+  vocalRemoval: boolean
   lrcText: string
   audioSource: AudioSource
   youtubeId: string | null
@@ -38,6 +40,7 @@ interface SongState {
   clearSong: () => void
   setOffset: (offset: number) => void
   setPitch: (pitch: number) => void
+  setVocalRemoval: (enabled: boolean) => void
   setLyrics: (lyrics: LyricLine[]) => void
   setLrcText: (text: string) => void
   setAudioSource: (source: AudioSource) => void
@@ -56,6 +59,7 @@ export const useSongStore = create<SongState>((set, get) => ({
   lyrics: [],
   offset: 0,
   pitch: 0,
+  vocalRemoval: false,
   lrcText: '',
   audioSource: 'youtube',
   youtubeId: null,
@@ -79,6 +83,7 @@ export const useSongStore = create<SongState>((set, get) => ({
       lyrics,
       offset: song.offset,
       pitch: song.pitch ?? 0,
+      vocalRemoval: song.vocalRemoval ?? false,
       lrcText: song.lrcText,
       audioSource: song.audioSource,
       youtubeId: song.youtubeId,
@@ -89,6 +94,7 @@ export const useSongStore = create<SongState>((set, get) => ({
         lrcText: song.lrcText,
         offset: song.offset,
         pitch: song.pitch ?? 0,
+        vocalRemoval: song.vocalRemoval ?? false,
         audioSource: song.audioSource,
         youtubeId: song.youtubeId,
         audioFileName: song.audioFileName,
@@ -106,6 +112,7 @@ export const useSongStore = create<SongState>((set, get) => ({
       lyrics: [],
       offset: 0,
       pitch: 0,
+      vocalRemoval: false,
       lrcText: '',
       audioSource: 'youtube',
       youtubeId: null,
@@ -117,6 +124,7 @@ export const useSongStore = create<SongState>((set, get) => ({
 
   setOffset: (offset: number) => set({ offset }),
   setPitch: (pitch: number) => set({ pitch }),
+  setVocalRemoval: (enabled: boolean) => set({ vocalRemoval: enabled }),
   setLyrics: (lyrics: LyricLine[]) => set({ lyrics }),
   setLrcText: (text: string) => set({ lrcText: text }),
   setAudioSource: (source: AudioSource) => set({ audioSource: source }),
@@ -133,6 +141,7 @@ export const useSongStore = create<SongState>((set, get) => ({
         lrcText: state.lrcText,
         offset: state.offset,
         pitch: state.pitch,
+        vocalRemoval: state.vocalRemoval,
         audioSource: state.audioSource,
         youtubeId: state.youtubeId,
         audioFileName: state.audioFileName,
@@ -149,6 +158,7 @@ export const useSongStore = create<SongState>((set, get) => ({
       state.lrcText !== saved.lrcText ||
       state.offset !== saved.offset ||
       state.pitch !== saved.pitch ||
+      state.vocalRemoval !== saved.vocalRemoval ||
       state.audioSource !== saved.audioSource ||
       state.youtubeId !== saved.youtubeId ||
       state.audioFileName !== saved.audioFileName

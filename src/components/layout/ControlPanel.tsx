@@ -27,7 +27,7 @@ const navBtnClass =
 const navBtnStyle: React.CSSProperties = { width: '28px', height: '28px', borderRadius: '6px', padding: 0 }
 
 export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlPanelProps) {
-  const { currentSongId, currentSongTitle, currentSongCreatedAt, lrcText, offset, pitch, audioSource, youtubeId, audioFileName, folderId } = useSongStore(
+  const { currentSongId, currentSongTitle, currentSongCreatedAt, lrcText, offset, pitch, vocalRemoval, audioSource, youtubeId, audioFileName, folderId } = useSongStore(
     useShallow((s) => ({
       currentSongId: s.currentSongId,
       currentSongTitle: s.currentSongTitle,
@@ -35,6 +35,7 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
       lrcText: s.lrcText,
       offset: s.offset,
       pitch: s.pitch,
+      vocalRemoval: s.vocalRemoval,
       audioSource: s.audioSource,
       youtubeId: s.youtubeId,
       audioFileName: s.audioFileName,
@@ -56,6 +57,7 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
       lrcText,
       offset,
       pitch,
+      vocalRemoval,
       audioSource,
       youtubeId,
       audioFileName,

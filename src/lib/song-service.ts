@@ -40,6 +40,7 @@ export function debouncedSaveSong(delay = 600) {
       lrcText: state.lrcText,
       offset: state.offset,
       pitch: state.pitch,
+      vocalRemoval: state.vocalRemoval,
       audioSource: state.audioSource,
       youtubeId: state.youtubeId,
       audioFileName: state.audioFileName,
@@ -86,6 +87,7 @@ function isValidSong(obj: unknown): obj is Song {
     typeof s.lrcText === 'string' &&
     typeof s.offset === 'number' && Number.isFinite(s.offset) &&
     (s.pitch === undefined || (typeof s.pitch === 'number' && Number.isFinite(s.pitch))) &&
+    (s.vocalRemoval === undefined || typeof s.vocalRemoval === 'boolean') &&
     (s.audioSource === 'youtube' || s.audioSource === 'local') &&
     (s.youtubeId === null || typeof s.youtubeId === 'string') &&
     (s.audioFileName === null || typeof s.audioFileName === 'string') &&
@@ -147,8 +149,8 @@ export async function importSongs(file: File): Promise<number> {
   let count = 0
   for (const item of songList) {
     if (isValidSong(item)) {
-      const { id, name, lrcText, offset, pitch = 0, audioSource, youtubeId, audioFileName, folderId = null, createdAt, updatedAt } = item
-      await db.songs.put({ id, name, lrcText, offset, pitch, audioSource, youtubeId, audioFileName, folderId, createdAt, updatedAt })
+      const { id, name, lrcText, offset, pitch = 0, vocalRemoval = false, audioSource, youtubeId, audioFileName, folderId = null, createdAt, updatedAt } = item
+      await db.songs.put({ id, name, lrcText, offset, pitch, vocalRemoval, audioSource, youtubeId, audioFileName, folderId, createdAt, updatedAt })
       count++
     }
   }

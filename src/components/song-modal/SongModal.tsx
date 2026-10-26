@@ -96,6 +96,7 @@ export function SongModal({ open, onOpenChange, editSong, engine }: SongModalPro
       lrcText: lrcText.trim(),
       offset: isEditMode ? editSong!.offset : 0,
       pitch: isEditMode ? editSong!.pitch : 0,
+      vocalRemoval: isEditMode ? (editSong!.vocalRemoval ?? false) : false,
       audioSource,
       youtubeId: isYoutube ? extractVideoId(youtubeUrl) : null,
       audioFileName: isYoutube ? null : audioFileName || null,

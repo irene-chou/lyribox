@@ -8,7 +8,7 @@ const { debouncedSaveSong } = await import('@/lib/song-service')
 const { useSongStore } = await import('@/stores/useSongStore')
 const { usePlaybackStore } = await import('@/stores/usePlaybackStore')
 const { useSyncStore } = await import('@/stores/useSyncStore')
-const { adjustOffset, resetOffset, adjustPitch, setPitch, adjustActiveFontSize } = await import('../playback-actions')
+const { adjustOffset, resetOffset, adjustPitch, setPitch, toggleVocalRemoval, adjustActiveFontSize } = await import('../playback-actions')
 const { useUISettingsStore } = await import('@/stores/useUISettingsStore')
 
 const song = {
@@ -17,6 +17,7 @@ const song = {
   lrcText: '[00:01.00]a\n[00:05.00]b\n[00:10.00]c',
   offset: 0,
   pitch: 0,
+  vocalRemoval: false,
   audioSource: 'youtube' as const,
   youtubeId: 'x',
   audioFileName: null,
@@ -66,6 +67,23 @@ describe('pitch', () => {
     expect(useSongStore.getState().pitch).toBe(12)
     setPitch(-20)
     expect(useSongStore.getState().pitch).toBe(-12)
+  })
+})
+
+describe('toggleVocalRemoval', () => {
+  it('flips the flag and triggers auto-save', () => {
+    toggleVocalRemoval()
+    expect(useSongStore.getState().vocalRemoval).toBe(true)
+    toggleVocalRemoval()
+    expect(useSongStore.getState().vocalRemoval).toBe(false)
+    expect(debouncedSaveSong).toHaveBeenCalledTimes(2)
+  })
+
+  it('does nothing without a current song', () => {
+    useSongStore.getState().clearSong()
+    toggleVocalRemoval()
+    expect(useSongStore.getState().vocalRemoval).toBe(false)
+    expect(debouncedSaveSong).not.toHaveBeenCalled()
   })
 })
 

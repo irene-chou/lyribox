@@ -3,6 +3,7 @@ import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useSongStore } from '@/stores/useSongStore'
 import { createStretchPlayer, type StretchPlayer } from '@/lib/stretch-player'
 import { computePeaks } from '@/lib/waveform'
+import { removeCenterChannel } from '@/lib/vocal-removal'
 
 /**
  * Local file playback through a Signalsmith Stretch worklet. The worklet owns
@@ -21,6 +22,13 @@ export function useLocalAudioPlayer() {
   const loadingRef = useRef<Promise<void> | null>(null)
   const loadGenerationRef = useRef(0)
   const startingRef = useRef(false)
+
+  // Decoded samples of the current file. The side (去人聲) version is computed
+  // lazily on first use and cached until the next file loads.
+  const originalChannelsRef = useRef<Float32Array[] | null>(null)
+  const sideChannelsRef = useRef<Float32Array[] | null>(null)
+  const loadedVariantRef = useRef<'original' | 'side'>('original')
+  const swappingRef = useRef<Promise<void> | null>(null)
 
   const stopTimeUpdates = useCallback(() => {
     cancelAnimationFrame(rafIdRef.current)
@@ -133,6 +141,67 @@ export function useLocalAudioPlayer() {
     }
   }, [stopTimeUpdates])
 
+  /** Channels to feed the worklet for the current 去人聲 setting. */
+  const channelsFor = useCallback((vocalRemoval: boolean): Float32Array[] | null => {
+    const original = originalChannelsRef.current
+    if (!original) return null
+    if (!vocalRemoval) return original
+    if (!sideChannelsRef.current) sideChannelsRef.current = removeCenterChannel(original)
+    return sideChannelsRef.current
+  }, [])
+
+  /**
+   * Swap the worklet's buffers between the original and side versions while
+   * keeping the playback position and play/pause state.
+   */
+  const applyVocalRemoval = useCallback(
+    (vocalRemoval: boolean) => {
+      const run = async () => {
+        if (swappingRef.current) await swappingRef.current
+        if (loadingRef.current) await loadingRef.current
+
+        const player = playerRef.current
+        const generation = loadGenerationRef.current
+        const variant = vocalRemoval ? 'side' : 'original'
+        if (!player || durationRef.current === 0 || loadedVariantRef.current === variant) return
+
+        const channels = channelsFor(vocalRemoval)
+        if (!channels || generation !== loadGenerationRef.current) return
+
+        const wasPlaying = player.isPlaying()
+        const position = getCurrentTime()
+        stopTimeUpdates()
+        await player.load(channels)
+        if (generation !== loadGenerationRef.current) return
+        loadedVariantRef.current = variant
+        savedPositionRef.current = position
+
+        // Re-check the store: pause() may have run while buffers were swapping
+        if (wasPlaying && usePlaybackStore.getState().status === 'PLAYING') {
+          await player.start(position, useSongStore.getState().pitch)
+          startTimeUpdates()
+        }
+      }
+      const promise = run().finally(() => {
+        if (swappingRef.current === promise) swappingRef.current = null
+      })
+      swappingRef.current = promise
+    },
+    [channelsFor, getCurrentTime, startTimeUpdates, stopTimeUpdates],
+  )
+
+  // 去人聲 toggles swap buffers live; a new file picks up the flag in loadFile
+  useEffect(() => {
+    let prev = useSongStore.getState().vocalRemoval
+
+    const unsub = useSongStore.subscribe((state) => {
+      if (state.vocalRemoval === prev) return
+      prev = state.vocalRemoval
+      applyVocalRemoval(state.vocalRemoval)
+    })
+    return unsub
+  }, [applyVocalRemoval])
+
   const loadFile = useCallback((objectUrl: string) => {
     const ctx = ensureAudioContext()
     const generation = ++loadGenerationRef.current
@@ -141,6 +210,8 @@ export function useLocalAudioPlayer() {
     void stopPlayback()
     savedPositionRef.current = 0
     durationRef.current = 0
+    originalChannelsRef.current = null
+    sideChannelsRef.current = null
 
     loadingRef.current = (async () => {
       const response = await fetch(objectUrl)
@@ -152,11 +223,14 @@ export function useLocalAudioPlayer() {
       // A newer loadFile() superseded this one
       if (generation !== loadGenerationRef.current) return
 
-      const channels = Array.from(
+      const original = Array.from(
         { length: audioBuffer.numberOfChannels },
         (_, ch) => audioBuffer.getChannelData(ch),
       )
-      await player.load(channels)
+      originalChannelsRef.current = original
+      const vocalRemoval = useSongStore.getState().vocalRemoval
+      loadedVariantRef.current = vocalRemoval ? 'side' : 'original'
+      await player.load(channelsFor(vocalRemoval) ?? original)
       await player.setSemitones(useSongStore.getState().pitch)
       if (generation !== loadGenerationRef.current) return
 
@@ -166,7 +240,7 @@ export function useLocalAudioPlayer() {
       usePlaybackStore.getState().setCurrentTime(0)
       usePlaybackStore.getState().setStatus('IDLE')
     })()
-  }, [ensureAudioContext, ensurePlayer, stopPlayback, stopTimeUpdates])
+  }, [channelsFor, ensureAudioContext, ensurePlayer, stopPlayback, stopTimeUpdates])
 
   const play = useCallback(async () => {
     if (startingRef.current) return
@@ -183,6 +257,7 @@ export function useLocalAudioPlayer() {
         await loadingRef.current
         loadingRef.current = null
       }
+      if (swappingRef.current) await swappingRef.current
 
       const player = playerRef.current
       if (!player || durationRef.current === 0) return
