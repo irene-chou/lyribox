@@ -16,6 +16,23 @@ function tagToSeconds(min: string, sec: string, frac: string | undefined): numbe
   return parseInt(min) * 60 + parseInt(sec) + ms / 1000
 }
 
+/** True for LRC metadata lines such as [ti:], [ar:], [offset:]. */
+export function isMetadataLine(line: string): boolean {
+  return /^\[(?:ti|ar|al|by|offset|re|ve):/i.test(line)
+}
+
+/** Extract every line time tag (in seconds) plus the remaining text (tags stripped). */
+export function parseTimeTags(line: string): { times: number[]; text: string } {
+  const times: number[] = []
+  let match: RegExpExecArray | null
+  LINE_TAG.lastIndex = 0
+  while ((match = LINE_TAG.exec(line)) !== null) {
+    times.push(tagToSeconds(match[1], match[2], match[3]))
+  }
+  const text = line.replace(LINE_TAG, '').trim()
+  return { times, text }
+}
+
 /**
  * Parse LRC format text into an array of timed lyric lines.
  * Supports multiple time tags on the same line and Enhanced LRC
@@ -36,8 +53,7 @@ export function parseLRC(text: string): ParseResult {
   }
 
   for (const line of lines) {
-    // Skip metadata tags
-    if (/^\[(?:ti|ar|al|by|offset|re|ve):/i.test(line)) continue
+    if (isMetadataLine(line)) continue
 
     const times: number[] = []
     let match: RegExpExecArray | null
