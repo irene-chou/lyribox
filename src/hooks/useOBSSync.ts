@@ -5,13 +5,11 @@ import {
   PIESOCKET_API_KEY,
   PIESOCKET_CLUSTER_ID,
 } from '@/lib/piesocket'
-import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
-import { useSyncStore } from '@/stores/useSyncStore'
 import { observeReconnects } from '@/lib/piesocket'
-import { pickObsSettings } from '@/lib/obs-settings'
-import { SYNC_PROTOCOL_VERSION } from '@/types'
-import type { FullStateData, SyncMessage, SyncMessageType } from '@/types'
+import { buildFullState } from '@/lib/obs-state'
+import { publishToPreview } from '@/lib/obs-preview-bridge'
+import type { SyncMessage, SyncMessageType } from '@/types'
 
 const VALID_SYNC_TYPES = new Set<string>([
   'FULL_STATE', 'LYRICS_LOADED', 'SYNC_UPDATE', 'SETTINGS_PATCH',
@@ -40,6 +38,8 @@ export function useOBSSync() {
 
   const broadcast = useCallback(
     (type: SyncMessageType, data: Record<string, unknown>) => {
+      // The in-app OBS preview mirrors every message, PieSocket or not
+      publishToPreview(type, data)
       if (!channelRef.current) return
       try {
         channelRef.current.publish('sync', { type, data })
@@ -51,22 +51,7 @@ export function useOBSSync() {
   )
 
   const broadcastFullState = useCallback(() => {
-    const song = useSongStore.getState()
-    const ui = useUISettingsStore.getState()
-    const sync = useSyncStore.getState()
-
-    const settings = pickObsSettings(ui)
-    const data: FullStateData = {
-      v: SYNC_PROTOCOL_VERSION,
-      lyrics: song.lyrics,
-      songTitle: song.currentSongTitle,
-      currentLineIndex: sync.currentLineIndex,
-      offset: song.offset,
-      settings,
-      // Settings also spread at top level so a v1 obs.html still renders correctly.
-      ...settings,
-    }
-    broadcast('FULL_STATE', data as unknown as Record<string, unknown>)
+    broadcast('FULL_STATE', buildFullState())
   }, [broadcast])
 
   // Initialize PieSocket connection (lazily — see obsSyncEnabled)

@@ -11,6 +11,8 @@ interface UISettingsState extends UISettings {
    * Until then no PieSocket connection is opened at all. Not part of resetAll.
    */
   obsSyncEnabled: boolean
+  /** Whether the embedded "OBS 預覽" panel in the sidebar is expanded (not part of resetAll). */
+  obsPreviewOpen: boolean
 
   setActiveFontSize: (size: number) => void
   setOtherFontSize: (size: number) => void
@@ -27,6 +29,7 @@ interface UISettingsState extends UISettings {
   setPersistLocalAudio: (persist: boolean) => void
   setDisplaySettingsOpen: (open: boolean) => void
   setObsSyncEnabled: (enabled: boolean) => void
+  setObsPreviewOpen: (open: boolean) => void
   resetAll: () => void
 }
 
@@ -36,6 +39,7 @@ export const useUISettingsStore = create<UISettingsState>()(
       ...DEFAULT_UI_SETTINGS,
       displaySettingsOpen: false,
       obsSyncEnabled: false,
+      obsPreviewOpen: false,
 
       setActiveFontSize: (size: number) => set({ activeFontSize: size }),
       setOtherFontSize: (size: number) => set({ otherFontSize: size }),
@@ -52,6 +56,7 @@ export const useUISettingsStore = create<UISettingsState>()(
       setPersistLocalAudio: (persist: boolean) => set({ persistLocalAudio: persist }),
       setDisplaySettingsOpen: (open: boolean) => set({ displaySettingsOpen: open }),
       setObsSyncEnabled: (enabled: boolean) => set({ obsSyncEnabled: enabled }),
+      setObsPreviewOpen: (open: boolean) => set({ obsPreviewOpen: open }),
       resetAll: () => set({ ...DEFAULT_UI_SETTINGS }),
     }),
     {

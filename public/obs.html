@@ -211,12 +211,74 @@
     if (needGap) applyGap();
   }
 
-  // ========== PieSocket (OBS Sync) ==========
+  // ========== Message handling (shared by PieSocket and preview mode) ==========
+  function handleMessage(msg) {
+    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
+    const { type, data } = msg;
+    if (type === 'FULL_STATE' || type === 'LYRICS_LOADED') gotState = true;
+    switch (type) {
+      case 'FULL_STATE':
+        lyrics = data.lyrics || [];
+        currentLineIndex = data.currentLineIndex;
+        songTitle = data.songTitle || '';
+        // v2 nests settings; v1 spread them at top level
+        applySettings(data.settings || data, { render: false });
+        renderLyrics();
+        updateActiveLine();
+        updateNowSinging();
+        applyColors();
+        applyGap();
+        break;
+      case 'LYRICS_LOADED':
+        lyrics = data.lyrics || [];
+        currentLineIndex = -1;
+        songTitle = data.songTitle || '';
+        renderLyrics();
+        updateNowSinging();
+        break;
+      case 'SYNC_UPDATE':
+        if (data.currentLineIndex !== currentLineIndex) {
+          currentLineIndex = data.currentLineIndex;
+          updateActiveLine();
+        }
+        break;
+      case 'SETTINGS_PATCH':
+        applySettings(data);
+        break;
+      // deprecated: protocol v1 per-field settings messages. Older app builds
+      // still send these; drop this block in the next release.
+      case 'FONT_SIZE':
+      case 'LYRIC_COLORS':
+      case 'TITLE_FONT_SIZE':
+      case 'LYRICS_GAP':
+      case 'VISIBLE_RANGE':
+        applySettings(data);
+        break;
+      case 'OFFSET':
+        // Offset is applied on control page side; OBS just needs fresh sync
+        break;
+    }
+  }
+
+  // ========== Preview mode (embedded in the control page via <iframe>) ==========
+  // `?preview=1`: no PieSocket at all — the parent window feeds the same SyncMessages
+  // through postMessage. Only same-origin messages from the parent are accepted.
   const params = new URLSearchParams(window.location.search);
+  const previewMode = params.get('preview') === '1';
+
+  if (previewMode && window.parent !== window) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent || event.origin !== window.location.origin) return;
+      handleMessage(event.data);
+    });
+    window.parent.postMessage({ type: 'REQUEST_STATE', data: null }, window.location.origin);
+  }
+
+  // ========== PieSocket (OBS Sync) ==========
   const sessionId = params.get('s') || '';
   const channelName = sessionId ? `lyribox-${sessionId}` : 'lyribox';
 
-  const piesocket = new PieSocket.default({
+  const piesocket = previewMode ? null : new PieSocket.default({
     clusterId: '__VITE_PIESOCKET_CLUSTER_ID__',
     apiKey: '__VITE_PIESOCKET_API_KEY__',
     notifySelf: 0,
@@ -233,52 +295,7 @@
     piesocket.subscribe(channelName).then(ch => {
       syncChannel = ch;
 
-      ch.listen('sync', (msg) => {
-        const { type, data } = msg;
-        if (type === 'FULL_STATE' || type === 'LYRICS_LOADED') gotState = true;
-        switch (type) {
-          case 'FULL_STATE':
-            lyrics = data.lyrics || [];
-            currentLineIndex = data.currentLineIndex;
-            songTitle = data.songTitle || '';
-            // v2 nests settings; v1 spread them at top level
-            applySettings(data.settings || data, { render: false });
-            renderLyrics();
-            updateActiveLine();
-            updateNowSinging();
-            applyColors();
-            applyGap();
-            break;
-          case 'LYRICS_LOADED':
-            lyrics = data.lyrics || [];
-            currentLineIndex = -1;
-            songTitle = data.songTitle || '';
-            renderLyrics();
-            updateNowSinging();
-            break;
-          case 'SYNC_UPDATE':
-            if (data.currentLineIndex !== currentLineIndex) {
-              currentLineIndex = data.currentLineIndex;
-              updateActiveLine();
-            }
-            break;
-          case 'SETTINGS_PATCH':
-            applySettings(data);
-            break;
-          // deprecated: protocol v1 per-field settings messages. Older app builds
-          // still send these; drop this block in the next release.
-          case 'FONT_SIZE':
-          case 'LYRIC_COLORS':
-          case 'TITLE_FONT_SIZE':
-          case 'LYRICS_GAP':
-          case 'VISIBLE_RANGE':
-            applySettings(data);
-            break;
-          case 'OFFSET':
-            // Offset is applied on control page side; OBS just needs fresh sync
-            break;
-        }
-      });
+      ch.listen('sync', handleMessage);
 
       // Ask for the full state once on connect. The control page also pushes it
       // whenever it (re)connects, so no polling is needed while idle.
@@ -309,7 +326,7 @@
     });
   }
 
-  connectChannel();
+  if (!previewMode) connectChannel();
 
   function renderLyrics() {
     const container = document.getElementById('lyricsContainer');
