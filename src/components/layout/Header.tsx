@@ -10,6 +10,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ObsPresetsDialog } from '@/components/settings/ObsPresetsDialog'
+
+/** 多組 OBS 設定連結暫時關閉（功能保留，待決定要提供哪些預設）。 */
+const OBS_PRESETS_ENABLED = false
 import { getOBSUrl } from '@/lib/piesocket'
 import { describeObsParams } from '@/lib/obs-params'
 import { promptDialog } from '@/stores/useDialogStore'
@@ -98,12 +101,13 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
           <button
             onClick={() => copyOBSUrl()}
             className={`${iconBtn} ${copied ? 'text-lb-success' : ''}`}
-            style={{ ...iconBtnStyle, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+            style={OBS_PRESETS_ENABLED ? { ...iconBtnStyle, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : iconBtnStyle}
             title="複製 OBS 瀏覽器來源 URL"
             aria-label="複製 OBS 瀏覽器來源 URL"
           >
             {copied ? <Check size={isMobile ? 18 : 20} /> : <Link size={isMobile ? 18 : 20} />}
           </button>
+          {OBS_PRESETS_ENABLED && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -139,8 +143,9 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
-        <ObsPresetsDialog open={presetsOpen} onOpenChange={setPresetsOpen} onCopy={copyOBSUrl} />
+        {OBS_PRESETS_ENABLED && <ObsPresetsDialog open={presetsOpen} onOpenChange={setPresetsOpen} onCopy={copyOBSUrl} />}
 
         {!isMobile && (
           <button
