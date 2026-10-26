@@ -12,6 +12,9 @@ import { PitchControls } from '../playback/PitchControls'
 import { DisplaySettings } from '../settings/DisplaySettings'
 import { OBSPreview } from '../settings/OBSPreview'
 import { CloudBackupSettings } from '../settings/CloudBackupSettings'
+
+/** 雲端備份暫時關閉（功能保留，之後再開）。 */
+const CLOUD_BACKUP_ENABLED = false
 import { SaveStatusIndicator } from './SaveStatusIndicator'
 import type { Song } from '@/types'
 import type { usePlaybackEngine } from '@/hooks/usePlaybackEngine'
@@ -173,8 +176,8 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
       {/* 顯示設定（可收合） */}
       <DisplaySettings />
 
-      {/* 雲端備份（可收合） */}
-      <CloudBackupSettings />
+      {/* 雲端備份（可收合；暫時關閉） */}
+      {CLOUD_BACKUP_ENABLED && <CloudBackupSettings />}
 
       {!isMobile && (
         <p className="text-lb-text-secondary" style={{ marginTop: 'auto', fontSize: '11px', lineHeight: 1.6 }}>
