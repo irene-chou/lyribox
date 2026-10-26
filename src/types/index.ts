@@ -1,8 +1,18 @@
+/** One word/syllable of an Enhanced LRC line; `time` is absolute seconds. */
+export interface LyricWord {
+  time: number
+  text: string
+}
+
 export interface LyricLine {
   time: number
   text: string
   /** Translation / romanization lines that shared this timestamp in the LRC (newline-joined). */
   subText?: string
+  /** Word-level timing parsed from Enhanced LRC `<mm:ss.xx>` tags; absent for plain lines. */
+  words?: LyricWord[]
+  /** End of the last word, from a trailing `<mm:ss.xx>` tag with no text after it. */
+  endTime?: number
 }
 
 export type AudioSource = 'youtube' | 'local'
@@ -140,7 +150,11 @@ export interface FullStateData extends ObsDisplaySettings {
 }
 
 export type SyncMessage =
-  | { type: 'SYNC_UPDATE'; data: { currentLineIndex: number } }
+  | {
+      type: 'SYNC_UPDATE'
+      /** `currentTime` (offset-applied seconds) is only included while the active line has word timing. */
+      data: { currentLineIndex: number; currentTime?: number }
+    }
   | { type: 'LYRICS_LOADED'; data: { lyrics: LyricLine[]; songTitle: string; nextSongTitle: string | null } }
   /** Playlist changed mid-song; OBS updates the 「下一首」 line without resetting lyrics. */
   | { type: 'NEXT_SONG'; data: { nextSongTitle: string | null } }

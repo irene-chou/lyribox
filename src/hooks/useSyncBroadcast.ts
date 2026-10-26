@@ -15,7 +15,10 @@ interface UseSyncBroadcastOptions {
 const SETTINGS_DEBOUNCE_MS = 50
 
 // Module-level selectors — stable references that never change
-const selectSyncUpdate = (s: { currentLineIndex: number }) => ({ currentLineIndex: s.currentLineIndex })
+const selectSyncUpdate = (s: { currentLineIndex: number; syncTime: number | null }) =>
+  s.syncTime === null
+    ? { currentLineIndex: s.currentLineIndex }
+    : { currentLineIndex: s.currentLineIndex, currentTime: s.syncTime }
 const selectLyricsLoaded = (s: { lyrics: unknown; currentSongTitle: string }) => ({ lyrics: s.lyrics, songTitle: s.currentSongTitle })
 // nextSongTitle rides along with LYRICS_LOADED (read at send time, not a trigger — OBS resets the
 // active line on LYRICS_LOADED) and gets its own NEXT_SONG message when it changes mid-song.
