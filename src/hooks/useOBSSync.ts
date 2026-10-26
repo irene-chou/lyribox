@@ -9,12 +9,15 @@ import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { useSyncStore } from '@/stores/useSyncStore'
 import { observeReconnects } from '@/lib/piesocket'
-import type { SyncMessage, SyncMessageType } from '@/types'
+import { pickObsSettings } from '@/lib/obs-settings'
+import { SYNC_PROTOCOL_VERSION } from '@/types'
+import type { FullStateData, SyncMessage, SyncMessageType } from '@/types'
 
 const VALID_SYNC_TYPES = new Set<string>([
-  'FULL_STATE', 'LYRICS_LOADED', 'SYNC_UPDATE', 'FONT_SIZE',
-  'LYRIC_COLORS', 'TITLE_FONT_SIZE', 'LYRICS_GAP', 'VISIBLE_RANGE',
+  'FULL_STATE', 'LYRICS_LOADED', 'SYNC_UPDATE', 'SETTINGS_PATCH',
   'OFFSET', 'REQUEST_STATE',
+  // deprecated protocol v1 types, still accepted
+  'FONT_SIZE', 'LYRIC_COLORS', 'TITLE_FONT_SIZE', 'LYRICS_GAP', 'VISIBLE_RANGE',
 ])
 
 function isValidSyncMessage(msg: unknown): msg is SyncMessage {
@@ -52,23 +55,18 @@ export function useOBSSync() {
     const ui = useUISettingsStore.getState()
     const sync = useSyncStore.getState()
 
-    broadcast('FULL_STATE', {
+    const settings = pickObsSettings(ui)
+    const data: FullStateData = {
+      v: SYNC_PROTOCOL_VERSION,
       lyrics: song.lyrics,
-      currentLineIndex: sync.currentLineIndex,
-      activeFontSize: ui.activeFontSize,
-      otherFontSize: ui.otherFontSize,
-      lyricsGap: ui.lyricsGap,
-      titleFontSize: ui.titleFontSize,
-      showTitle: ui.showTitle,
-      visibleBefore: ui.visibleBefore,
-      visibleAfter: ui.visibleAfter,
-      offset: song.offset,
-      activeColor: ui.activeColor,
-      otherColor: ui.otherColor,
-      passedColor: ui.passedColor,
-      lyricsBgColor: ui.lyricsBgColor,
       songTitle: song.currentSongTitle,
-    })
+      currentLineIndex: sync.currentLineIndex,
+      offset: song.offset,
+      settings,
+      // Settings also spread at top level so a v1 obs.html still renders correctly.
+      ...settings,
+    }
+    broadcast('FULL_STATE', data as unknown as Record<string, unknown>)
   }, [broadcast])
 
   // Initialize PieSocket connection (lazily — see obsSyncEnabled)

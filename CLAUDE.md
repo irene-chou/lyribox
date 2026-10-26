@@ -112,8 +112,9 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 ### OBS Sync
 - PieSocket WebSocket for real-time sync to `public/obs.html` (standalone OBS browser source)
 - Channel: `lyribox-{sessionId}` where sessionId is stored in `localStorage['lb-session-id']`
-- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
-- `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
+- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change. Display settings go out as a single `SETTINGS_PATCH` carrying only the changed keys of `ObsDisplaySettings` (shallow diff via `lib/obs-settings.ts` `pickObsSettings` / `diffSettings`, debounced 50ms so slider drags coalesce). Adding an OBS-visible setting = add the key to `ObsDisplaySettings` + `OBS_SETTING_KEYS` and handle it in `obs.html` `applySettings`
+- `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect. `FULL_STATE` carries `v: SYNC_PROTOCOL_VERSION` (currently 2) and a nested `settings: ObsDisplaySettings` (also spread at top level for v1 obs pages)
+- **Protocol v1 compatibility:** the per-field types (`FONT_SIZE`, `LYRIC_COLORS`, `TITLE_FONT_SIZE`, `LYRICS_GAP`, `VISIBLE_RANGE`) are `@deprecated`; the app no longer sends them but `obs.html` still accepts them (routed through `applySettings`). Remove both the type variants and the `obs.html` cases in the next release
 - **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
 - OBS page requests state once per (re)connect (plus bounded retries at 5s/20s if nothing arrived) — no polling while idle. piesocket-js 5.x emits no 'open' event, so reconnects are observed by overriding `channel.onOpen` (`lib/piesocket.ts` `observeReconnects`, same trick inline in `obs.html`)
 

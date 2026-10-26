@@ -166,6 +166,51 @@
     }
   }
 
+  // Fallbacks used when a patch carries an empty/undefined value
+  const SETTING_DEFAULTS = {
+    activeFontSize: 32,
+    otherFontSize: 28,
+    titleFontSize: 18,
+    showTitle: true,
+    lyricsGap: 16,
+    visibleBefore: 0,
+    visibleAfter: 1,
+    activeColor: '#ffffff',
+    otherColor: '#9090a8',
+    passedColor: '#5a5a70',
+    lyricsBgColor: 'transparent',
+  };
+
+  /**
+   * Apply a (partial) settings object. Only keys present in `patch` are
+   * touched; each re-render step runs at most once per call.
+   */
+  function applySettings(patch, { render = true } = {}) {
+    if (!patch || typeof patch !== 'object') return;
+    const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+    const num = (k) => (typeof patch[k] === 'number' && !Number.isNaN(patch[k]) ? patch[k] : SETTING_DEFAULTS[k]);
+    const str = (k) => (patch[k] ? patch[k] : SETTING_DEFAULTS[k]);
+    let needLines = false, needTitle = false, needColors = false, needGap = false;
+
+    if (has('activeFontSize')) { activeFontSize = num('activeFontSize'); needLines = true; }
+    if (has('otherFontSize')) { otherFontSize = num('otherFontSize'); needLines = true; }
+    if (has('visibleBefore')) { visibleBefore = num('visibleBefore'); needLines = true; }
+    if (has('visibleAfter')) { visibleAfter = num('visibleAfter'); needLines = true; }
+    if (has('activeColor')) { activeColor = str('activeColor'); needLines = true; }
+    if (has('otherColor')) { otherColor = str('otherColor'); needLines = true; }
+    if (has('passedColor')) { passedColor = str('passedColor'); needLines = true; }
+    if (has('lyricsBgColor')) { lyricsBgColor = str('lyricsBgColor'); needColors = true; }
+    if (has('titleFontSize')) { titleFontSize = num('titleFontSize'); needTitle = true; }
+    if (has('showTitle')) { showTitle = patch.showTitle ?? SETTING_DEFAULTS.showTitle; needTitle = true; }
+    if (has('lyricsGap')) { lyricsGap = num('lyricsGap'); needGap = true; }
+
+    if (!render) return;
+    if (needLines) updateActiveLine();
+    if (needTitle) updateNowSinging();
+    if (needColors) applyColors();
+    if (needGap) applyGap();
+  }
+
   // ========== PieSocket (OBS Sync) ==========
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get('s') || '';
@@ -195,18 +240,9 @@
           case 'FULL_STATE':
             lyrics = data.lyrics || [];
             currentLineIndex = data.currentLineIndex;
-            activeFontSize = data.activeFontSize || 32;
-            otherFontSize = data.otherFontSize || 28;
-            titleFontSize = data.titleFontSize || 18;
-            showTitle = data.showTitle ?? true;
-            lyricsGap = data.lyricsGap ?? 16;
-            visibleBefore = data.visibleBefore ?? 0;
-            visibleAfter = data.visibleAfter ?? 1;
-            activeColor = data.activeColor || '#ffffff';
-            otherColor = data.otherColor || '#9090a8';
-            passedColor = data.passedColor || '#5a5a70';
-            lyricsBgColor = data.lyricsBgColor || 'transparent';
             songTitle = data.songTitle || '';
+            // v2 nests settings; v1 spread them at top level
+            applySettings(data.settings || data, { render: false });
             renderLyrics();
             updateActiveLine();
             updateNowSinging();
@@ -226,32 +262,17 @@
               updateActiveLine();
             }
             break;
+          case 'SETTINGS_PATCH':
+            applySettings(data);
+            break;
+          // deprecated: protocol v1 per-field settings messages. Older app builds
+          // still send these; drop this block in the next release.
           case 'FONT_SIZE':
-            activeFontSize = data.activeFontSize;
-            otherFontSize = data.otherFontSize;
-            updateActiveLine();
-            break;
           case 'LYRIC_COLORS':
-            activeColor = data.activeColor || '#ffffff';
-            otherColor = data.otherColor || '#9090a8';
-            passedColor = data.passedColor || '#5a5a70';
-            lyricsBgColor = data.lyricsBgColor || 'transparent';
-            updateActiveLine();
-            applyColors();
-            break;
           case 'TITLE_FONT_SIZE':
-            titleFontSize = data.titleFontSize;
-            showTitle = data.showTitle ?? true;
-            updateNowSinging();
-            break;
           case 'LYRICS_GAP':
-            lyricsGap = data.lyricsGap ?? 16;
-            applyGap();
-            break;
           case 'VISIBLE_RANGE':
-            visibleBefore = data.visibleBefore ?? 0;
-            visibleAfter = data.visibleAfter ?? 1;
-            updateActiveLine();
+            applySettings(data);
             break;
           case 'OFFSET':
             // Offset is applied on control page side; OBS just needs fresh sync

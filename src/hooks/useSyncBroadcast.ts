@@ -2,21 +2,22 @@ import { useEffect, useRef } from 'react'
 import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { useSyncStore } from '@/stores/useSyncStore'
-import type { SyncMessageType } from '@/types'
+import { pickObsSettings, diffSettings } from '@/lib/obs-settings'
+import type { ObsDisplaySettings, SyncMessageType } from '@/types'
+
+type Broadcast = (type: SyncMessageType, data: Record<string, unknown>) => void
 
 interface UseSyncBroadcastOptions {
-  broadcast: (type: SyncMessageType, data: Record<string, unknown>) => void
+  broadcast: Broadcast
 }
+
+/** Slider drags fire many store updates; coalesce them into one patch. */
+const SETTINGS_DEBOUNCE_MS = 50
 
 // Module-level selectors — stable references that never change
 const selectSyncUpdate = (s: { currentLineIndex: number }) => ({ currentLineIndex: s.currentLineIndex })
 const selectLyricsLoaded = (s: { lyrics: unknown; currentSongTitle: string }) => ({ lyrics: s.lyrics, songTitle: s.currentSongTitle })
 const selectOffset = (s: { offset: number }) => ({ offset: s.offset })
-const selectFontSize = (s: { activeFontSize: number; otherFontSize: number }) => ({ activeFontSize: s.activeFontSize, otherFontSize: s.otherFontSize })
-const selectTitleFontSize = (s: { titleFontSize: number; showTitle: boolean }) => ({ titleFontSize: s.titleFontSize, showTitle: s.showTitle })
-const selectLyricColors = (s: { activeColor: string; otherColor: string; passedColor: string; lyricsBgColor: string }) => ({ activeColor: s.activeColor, otherColor: s.otherColor, passedColor: s.passedColor, lyricsBgColor: s.lyricsBgColor })
-const selectLyricsGap = (s: { lyricsGap: number }) => ({ lyricsGap: s.lyricsGap })
-const selectVisibleRange = (s: { visibleBefore: number; visibleAfter: number }) => ({ visibleBefore: s.visibleBefore, visibleAfter: s.visibleAfter })
 
 /**
  * Generic store watcher: subscribes to a Zustand store and broadcasts
@@ -26,7 +27,7 @@ function useStoreWatcher<T>(
   store: { getState: () => T; subscribe: (cb: (state: T) => void) => () => void },
   selector: (state: T) => Record<string, unknown>,
   messageType: SyncMessageType,
-  broadcastRef: React.RefObject<(type: SyncMessageType, data: Record<string, unknown>) => void>,
+  broadcastRef: React.RefObject<Broadcast>,
 ) {
   useEffect(() => {
     let prev = selector(store.getState())
@@ -44,6 +45,36 @@ function useStoreWatcher<T>(
   }, [store, selector, messageType, broadcastRef])
 }
 
+/**
+ * Watches the OBS-relevant subset of UI settings and sends a single
+ * SETTINGS_PATCH containing only the keys that changed since the last send.
+ */
+function useSettingsWatcher(broadcastRef: React.RefObject<Broadcast>) {
+  useEffect(() => {
+    let lastSent: ObsDisplaySettings = pickObsSettings(useUISettingsStore.getState())
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const flush = () => {
+      timer = null
+      const next = pickObsSettings(useUISettingsStore.getState())
+      const patch = diffSettings(lastSent, next)
+      if (!patch) return
+      lastSent = next
+      broadcastRef.current('SETTINGS_PATCH', patch)
+    }
+
+    const unsub = useUISettingsStore.subscribe(() => {
+      if (timer !== null) return
+      timer = setTimeout(flush, SETTINGS_DEBOUNCE_MS)
+    })
+
+    return () => {
+      unsub()
+      if (timer !== null) clearTimeout(timer)
+    }
+  }, [broadcastRef])
+}
+
 export function useSyncBroadcast({ broadcast }: UseSyncBroadcastOptions) {
   const broadcastRef = useRef(broadcast)
   broadcastRef.current = broadcast
@@ -51,9 +82,5 @@ export function useSyncBroadcast({ broadcast }: UseSyncBroadcastOptions) {
   useStoreWatcher(useSyncStore, selectSyncUpdate, 'SYNC_UPDATE', broadcastRef)
   useStoreWatcher(useSongStore, selectLyricsLoaded, 'LYRICS_LOADED', broadcastRef)
   useStoreWatcher(useSongStore, selectOffset, 'OFFSET', broadcastRef)
-  useStoreWatcher(useUISettingsStore, selectFontSize, 'FONT_SIZE', broadcastRef)
-  useStoreWatcher(useUISettingsStore, selectTitleFontSize, 'TITLE_FONT_SIZE', broadcastRef)
-  useStoreWatcher(useUISettingsStore, selectLyricColors, 'LYRIC_COLORS', broadcastRef)
-  useStoreWatcher(useUISettingsStore, selectLyricsGap, 'LYRICS_GAP', broadcastRef)
-  useStoreWatcher(useUISettingsStore, selectVisibleRange, 'VISIBLE_RANGE', broadcastRef)
+  useSettingsWatcher(broadcastRef)
 }
