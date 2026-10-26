@@ -7,6 +7,7 @@ import { adjustOffset, SEEK_STEP } from '@/lib/playback-actions'
 import { navigateSong } from '@/lib/song-selection'
 import { shortcutHint } from '@/lib/shortcuts'
 import { VolumeControl } from './VolumeControl'
+import { WaveformBar } from './WaveformBar'
 import type { usePlaybackEngine } from '@/hooks/usePlaybackEngine'
 
 interface TransportBarProps {
@@ -50,6 +51,7 @@ export function TransportBar({ engine, isMobile }: TransportBarProps) {
   const status = usePlaybackStore((s) => s.status)
   const currentTime = usePlaybackStore((s) => s.currentTime)
   const duration = usePlaybackStore((s) => s.duration)
+  const waveform = usePlaybackStore((s) => s.waveform)
 
   const barRef = useRef<HTMLDivElement>(null)
 
@@ -91,6 +93,9 @@ export function TransportBar({ engine, isMobile }: TransportBarProps) {
   if (!currentSongId) return null
 
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
+  // Waveform only for decoded local files; YouTube / manual keep the plain bar
+  const showWaveform = audioSource === 'local' && !!audioFileObjectUrl && !!waveform
+  const waveformHeight = isMobile ? 28 : 32
 
   const statusColor = isPlaying
     ? 'var(--lb-success)'
@@ -120,7 +125,7 @@ export function TransportBar({ engine, isMobile }: TransportBarProps) {
         onPointerMove={handleBarPointerMove}
         className="flex-1"
         style={{
-          height: '24px',
+          height: showWaveform ? `${waveformHeight}px` : '24px',
           display: 'flex',
           alignItems: 'center',
           cursor: duration > 0 ? 'pointer' : 'default',
@@ -128,9 +133,13 @@ export function TransportBar({ engine, isMobile }: TransportBarProps) {
           touchAction: 'none',
         }}
       >
-        <div style={{ width: '100%', height: '8px', background: 'var(--lb-border)', borderRadius: '4px', overflow: 'hidden' }}>
-          <div style={{ width: `${progress}%`, height: '100%', background: 'var(--lb-accent)', borderRadius: '4px', transition: 'width 0.1s linear' }} />
-        </div>
+        {showWaveform ? (
+          <WaveformBar peaks={waveform} progress={progress / 100} height={waveformHeight} />
+        ) : (
+          <div style={{ width: '100%', height: '8px', background: 'var(--lb-border)', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ width: `${progress}%`, height: '100%', background: 'var(--lb-accent)', borderRadius: '4px', transition: 'width 0.1s linear' }} />
+          </div>
+        )}
       </div>
     </div>
   )
