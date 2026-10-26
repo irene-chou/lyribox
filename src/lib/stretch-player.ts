@@ -32,10 +32,28 @@ interface Clock {
   readonly currentTime: number
 }
 
+/**
+ * Channels that share an ArrayBuffer are copied so each has its own. The
+ * worklet's dropBuffers() transfers every channel buffer back in one message
+ * and a duplicate in that list throws inside the worklet, which never replies.
+ */
+export function withDistinctBuffers(channels: Float32Array[]): Float32Array[] {
+  const seen = new Set<ArrayBufferLike>()
+  return channels.map((ch) => {
+    if (seen.has(ch.buffer)) return ch.slice()
+    seen.add(ch.buffer)
+    return ch
+  })
+}
+
 export class StretchPlayer {
   private playing = false
   private lastInputTime = 0
   private lastInputAt = 0
+  // The worklet answers requests in order and cannot tell interleaved calls
+  // apart, so every node operation goes through this chain. Without it, a
+  // buffer swap racing a new file load leaves a promise that never settles.
+  private queue: Promise<unknown> = Promise.resolve()
 
   private readonly node: StretchNodeLike
   private readonly clock: Clock
@@ -45,35 +63,49 @@ export class StretchPlayer {
     this.clock = clock
   }
 
-  /** Replace the node's sample buffers with the given per-channel data. */
-  async load(channels: Float32Array[]): Promise<void> {
-    await this.node.dropBuffers()
-    await this.node.addBuffers(channels)
-    this.playing = false
-    this.lastInputTime = 0
-    this.lastInputAt = this.clock.currentTime
+  private enqueue<T>(op: () => Promise<T>): Promise<T> {
+    const next = this.queue.then(op, op)
+    this.queue = next.catch(() => undefined)
+    return next
   }
 
-  async start(offset: number, semitones: number): Promise<void> {
+  /** Replace the node's sample buffers with the given per-channel data. */
+  load(channels: Float32Array[]): Promise<void> {
+    return this.enqueue(async () => {
+      await this.node.dropBuffers()
+      await this.node.addBuffers(withDistinctBuffers(channels))
+      this.playing = false
+      this.lastInputTime = 0
+      this.lastInputAt = this.clock.currentTime
+    })
+  }
+
+  start(offset: number, semitones: number): Promise<void> {
     this.playing = true
     this.lastInputTime = offset
     this.lastInputAt = this.clock.currentTime
-    await this.node.schedule({ active: true, input: offset, rate: 1, semitones })
+    return this.enqueue(async () => {
+      await this.node.schedule({ active: true, input: offset, rate: 1, semitones })
+    })
   }
 
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
     if (this.playing) {
       // Freeze the interpolated position at the moment of stopping.
       this.lastInputTime = this.getCurrentTime()
       this.lastInputAt = this.clock.currentTime
       this.playing = false
     }
-    await this.node.schedule({ active: false })
+    return this.enqueue(async () => {
+      await this.node.schedule({ active: false })
+    })
   }
 
   /** Change pitch in place; playback position and state are untouched. */
-  async setSemitones(semitones: number): Promise<void> {
-    await this.node.schedule({ semitones })
+  setSemitones(semitones: number): Promise<void> {
+    return this.enqueue(async () => {
+      await this.node.schedule({ semitones })
+    })
   }
 
   /** Called with the worklet's reported input time and the context time it arrived. */

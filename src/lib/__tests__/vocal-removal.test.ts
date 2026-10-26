@@ -50,10 +50,10 @@ describe('removeCenterChannel', () => {
     expect(removeCenterChannel(mono)).toBe(mono)
   })
 
-  it('returns two identical side channels for stereo input', () => {
+  it('returns two equal side channels for stereo input', () => {
     const out = removeCenterChannel([new Float32Array([0.8, 0]), new Float32Array([0, 0.8])])
     expect(out).toHaveLength(2)
-    expect(out[0]).toBe(out[1])
+    expect(Array.from(out[0])).toEqual(Array.from(out[1]))
     expect(Array.from(out[0]).map((v) => +v.toFixed(6))).toEqual([0.8, -0.8])
   })
 
@@ -64,5 +64,12 @@ describe('removeCenterChannel', () => {
       new Float32Array([0.9]),
     ])
     expect(Array.from(out[0])).toEqual([0])
+  })
+
+  it('returns two distinct arrays so the worklet can transfer both buffers back', () => {
+    const [l, r] = removeCenterChannel([new Float32Array([1, 0]), new Float32Array([0, 1])])
+    expect(l).not.toBe(r)
+    expect(l.buffer).not.toBe(r.buffer)
+    expect(Array.from(l)).toEqual(Array.from(r))
   })
 })

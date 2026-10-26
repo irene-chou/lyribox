@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { StretchPlayer, type StretchNodeLike } from '../stretch-player'
+import { StretchPlayer, withDistinctBuffers, type StretchNodeLike } from '../stretch-player'
 
 interface Call { method: string; args: unknown[] }
 
@@ -90,5 +90,44 @@ describe('StretchPlayer', () => {
     clock.currentTime = 31
 
     expect(player.getCurrentTime()).toBeCloseTo(6.5, 5)
+  })
+
+  it('serializes node operations so interleaved calls settle in order', async () => {
+    const { node, calls } = fakeNode()
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    node.dropBuffers = (() => { calls.push({ method: 'dropBuffers', args: [] }); return gate }) as StretchNodeLike['dropBuffers']
+    const player = new StretchPlayer(node, clock)
+
+    const first = player.load([new Float32Array([1])])
+    const second = player.stop()
+    const third = player.load([new Float32Array([2])])
+    await Promise.resolve()
+    expect(calls.map((c) => c.method)).toEqual(['dropBuffers'])
+
+    release()
+    await Promise.all([first, second, third])
+    expect(calls.map((c) => c.method)).toEqual(['dropBuffers', 'addBuffers', 'schedule', 'dropBuffers', 'addBuffers'])
+  })
+
+  it('load copies channels that share one ArrayBuffer', async () => {
+    const { node, calls } = fakeNode()
+    const player = new StretchPlayer(node, clock)
+    const side = new Float32Array([1, 2])
+
+    await player.load([side, side])
+
+    const sent = calls[1].args[0] as Float32Array[]
+    expect(sent[0]).toBe(side)
+    expect(sent[1]).not.toBe(side)
+    expect(sent[1].buffer).not.toBe(side.buffer)
+    expect(Array.from(sent[1])).toEqual([1, 2])
+  })
+})
+
+describe('withDistinctBuffers', () => {
+  it('leaves already-distinct channels untouched', () => {
+    const l = new Float32Array([1]); const r = new Float32Array([2])
+    expect(withDistinctBuffers([l, r])).toEqual([l, r])
   })
 })

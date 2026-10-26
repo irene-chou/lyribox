@@ -190,13 +190,19 @@ export function useLocalAudioPlayer() {
     [channelsFor, getCurrentTime, startTimeUpdates, stopTimeUpdates],
   )
 
-  // 去人聲 toggles swap buffers live; a new file picks up the flag in loadFile
+  // 去人聲 toggles swap buffers live; a new file picks up the flag in loadFile.
+  // A flag change that arrives together with a song switch belongs to the new
+  // song, so the old file's buffers are left alone (loadFile replaces them).
   useEffect(() => {
     let prev = useSongStore.getState().vocalRemoval
+    let prevSongId = useSongStore.getState().currentSongId
 
     const unsub = useSongStore.subscribe((state) => {
+      const songChanged = state.currentSongId !== prevSongId
+      prevSongId = state.currentSongId
       if (state.vocalRemoval === prev) return
       prev = state.vocalRemoval
+      if (songChanged) return
       applyVocalRemoval(state.vocalRemoval)
     })
     return unsub

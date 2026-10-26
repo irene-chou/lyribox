@@ -49,5 +49,8 @@ export function sideSignal(left: Float32Array, right: Float32Array): Float32Arra
 export function removeCenterChannel(channels: Float32Array[]): Float32Array[] {
   if (channels.length < 2) return channels
   const side = sideSignal(channels[0], channels[1])
-  return [side, side]
+  // Two distinct arrays, not the same one twice: the worklet later transfers
+  // every channel's ArrayBuffer back in one postMessage, and a duplicate
+  // buffer in that transfer list throws, leaving the request unanswered.
+  return [side, side.slice()]
 }
