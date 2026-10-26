@@ -166,12 +166,98 @@
     }
   }
 
-  // ========== PieSocket (OBS Sync) ==========
+  // ========== Message handling (shared by PieSocket and preview mode) ==========
+  function handleMessage(msg) {
+    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
+    const { type, data } = msg;
+    if (type === 'FULL_STATE' || type === 'LYRICS_LOADED') gotState = true;
+    switch (type) {
+      case 'FULL_STATE':
+        lyrics = data.lyrics || [];
+        currentLineIndex = data.currentLineIndex;
+        activeFontSize = data.activeFontSize || 32;
+        otherFontSize = data.otherFontSize || 28;
+        titleFontSize = data.titleFontSize || 18;
+        showTitle = data.showTitle ?? true;
+        lyricsGap = data.lyricsGap ?? 16;
+        visibleBefore = data.visibleBefore ?? 0;
+        visibleAfter = data.visibleAfter ?? 1;
+        activeColor = data.activeColor || '#ffffff';
+        otherColor = data.otherColor || '#9090a8';
+        passedColor = data.passedColor || '#5a5a70';
+        lyricsBgColor = data.lyricsBgColor || 'transparent';
+        songTitle = data.songTitle || '';
+        renderLyrics();
+        updateActiveLine();
+        updateNowSinging();
+        applyColors();
+        applyGap();
+        break;
+      case 'LYRICS_LOADED':
+        lyrics = data.lyrics || [];
+        currentLineIndex = -1;
+        songTitle = data.songTitle || '';
+        renderLyrics();
+        updateNowSinging();
+        break;
+      case 'SYNC_UPDATE':
+        if (data.currentLineIndex !== currentLineIndex) {
+          currentLineIndex = data.currentLineIndex;
+          updateActiveLine();
+        }
+        break;
+      case 'FONT_SIZE':
+        activeFontSize = data.activeFontSize;
+        otherFontSize = data.otherFontSize;
+        updateActiveLine();
+        break;
+      case 'LYRIC_COLORS':
+        activeColor = data.activeColor || '#ffffff';
+        otherColor = data.otherColor || '#9090a8';
+        passedColor = data.passedColor || '#5a5a70';
+        lyricsBgColor = data.lyricsBgColor || 'transparent';
+        updateActiveLine();
+        applyColors();
+        break;
+      case 'TITLE_FONT_SIZE':
+        titleFontSize = data.titleFontSize;
+        showTitle = data.showTitle ?? true;
+        updateNowSinging();
+        break;
+      case 'LYRICS_GAP':
+        lyricsGap = data.lyricsGap ?? 16;
+        applyGap();
+        break;
+      case 'VISIBLE_RANGE':
+        visibleBefore = data.visibleBefore ?? 0;
+        visibleAfter = data.visibleAfter ?? 1;
+        updateActiveLine();
+        break;
+      case 'OFFSET':
+        // Offset is applied on control page side; OBS just needs fresh sync
+        break;
+    }
+  }
+
+  // ========== Preview mode (embedded in the control page via <iframe>) ==========
+  // `?preview=1`: no PieSocket at all — the parent window feeds the same SyncMessages
+  // through postMessage. Only same-origin messages from the parent are accepted.
   const params = new URLSearchParams(window.location.search);
+  const previewMode = params.get('preview') === '1';
+
+  if (previewMode && window.parent !== window) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent || event.origin !== window.location.origin) return;
+      handleMessage(event.data);
+    });
+    window.parent.postMessage({ type: 'REQUEST_STATE', data: null }, window.location.origin);
+  }
+
+  // ========== PieSocket (OBS Sync) ==========
   const sessionId = params.get('s') || '';
   const channelName = sessionId ? `lyribox-${sessionId}` : 'lyribox';
 
-  const piesocket = new PieSocket.default({
+  const piesocket = previewMode ? null : new PieSocket.default({
     clusterId: '__VITE_PIESOCKET_CLUSTER_ID__',
     apiKey: '__VITE_PIESOCKET_API_KEY__',
     notifySelf: 0,
@@ -188,76 +274,7 @@
     piesocket.subscribe(channelName).then(ch => {
       syncChannel = ch;
 
-      ch.listen('sync', (msg) => {
-        const { type, data } = msg;
-        if (type === 'FULL_STATE' || type === 'LYRICS_LOADED') gotState = true;
-        switch (type) {
-          case 'FULL_STATE':
-            lyrics = data.lyrics || [];
-            currentLineIndex = data.currentLineIndex;
-            activeFontSize = data.activeFontSize || 32;
-            otherFontSize = data.otherFontSize || 28;
-            titleFontSize = data.titleFontSize || 18;
-            showTitle = data.showTitle ?? true;
-            lyricsGap = data.lyricsGap ?? 16;
-            visibleBefore = data.visibleBefore ?? 0;
-            visibleAfter = data.visibleAfter ?? 1;
-            activeColor = data.activeColor || '#ffffff';
-            otherColor = data.otherColor || '#9090a8';
-            passedColor = data.passedColor || '#5a5a70';
-            lyricsBgColor = data.lyricsBgColor || 'transparent';
-            songTitle = data.songTitle || '';
-            renderLyrics();
-            updateActiveLine();
-            updateNowSinging();
-            applyColors();
-            applyGap();
-            break;
-          case 'LYRICS_LOADED':
-            lyrics = data.lyrics || [];
-            currentLineIndex = -1;
-            songTitle = data.songTitle || '';
-            renderLyrics();
-            updateNowSinging();
-            break;
-          case 'SYNC_UPDATE':
-            if (data.currentLineIndex !== currentLineIndex) {
-              currentLineIndex = data.currentLineIndex;
-              updateActiveLine();
-            }
-            break;
-          case 'FONT_SIZE':
-            activeFontSize = data.activeFontSize;
-            otherFontSize = data.otherFontSize;
-            updateActiveLine();
-            break;
-          case 'LYRIC_COLORS':
-            activeColor = data.activeColor || '#ffffff';
-            otherColor = data.otherColor || '#9090a8';
-            passedColor = data.passedColor || '#5a5a70';
-            lyricsBgColor = data.lyricsBgColor || 'transparent';
-            updateActiveLine();
-            applyColors();
-            break;
-          case 'TITLE_FONT_SIZE':
-            titleFontSize = data.titleFontSize;
-            showTitle = data.showTitle ?? true;
-            updateNowSinging();
-            break;
-          case 'LYRICS_GAP':
-            lyricsGap = data.lyricsGap ?? 16;
-            applyGap();
-            break;
-          case 'VISIBLE_RANGE':
-            visibleBefore = data.visibleBefore ?? 0;
-            visibleAfter = data.visibleAfter ?? 1;
-            updateActiveLine();
-            break;
-          case 'OFFSET':
-            // Offset is applied on control page side; OBS just needs fresh sync
-            break;
-        }
-      });
+      ch.listen('sync', handleMessage);
 
       // Ask for the full state once on connect. The control page also pushes it
       // whenever it (re)connects, so no polling is needed while idle.
@@ -288,7 +305,7 @@
     });
   }
 
-  connectChannel();
+  if (!previewMode) connectChannel();
 
   function renderLyrics() {
     const container = document.getElementById('lyricsContainer');

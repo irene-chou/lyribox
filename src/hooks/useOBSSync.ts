@@ -5,10 +5,10 @@ import {
   PIESOCKET_API_KEY,
   PIESOCKET_CLUSTER_ID,
 } from '@/lib/piesocket'
-import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
-import { useSyncStore } from '@/stores/useSyncStore'
 import { observeReconnects } from '@/lib/piesocket'
+import { buildFullState } from '@/lib/obs-state'
+import { publishToPreview } from '@/lib/obs-preview-bridge'
 import type { SyncMessage, SyncMessageType } from '@/types'
 
 const VALID_SYNC_TYPES = new Set<string>([
@@ -37,6 +37,8 @@ export function useOBSSync() {
 
   const broadcast = useCallback(
     (type: SyncMessageType, data: Record<string, unknown>) => {
+      // The in-app OBS preview mirrors every message, PieSocket or not
+      publishToPreview(type, data)
       if (!channelRef.current) return
       try {
         channelRef.current.publish('sync', { type, data })
@@ -48,27 +50,7 @@ export function useOBSSync() {
   )
 
   const broadcastFullState = useCallback(() => {
-    const song = useSongStore.getState()
-    const ui = useUISettingsStore.getState()
-    const sync = useSyncStore.getState()
-
-    broadcast('FULL_STATE', {
-      lyrics: song.lyrics,
-      currentLineIndex: sync.currentLineIndex,
-      activeFontSize: ui.activeFontSize,
-      otherFontSize: ui.otherFontSize,
-      lyricsGap: ui.lyricsGap,
-      titleFontSize: ui.titleFontSize,
-      showTitle: ui.showTitle,
-      visibleBefore: ui.visibleBefore,
-      visibleAfter: ui.visibleAfter,
-      offset: song.offset,
-      activeColor: ui.activeColor,
-      otherColor: ui.otherColor,
-      passedColor: ui.passedColor,
-      lyricsBgColor: ui.lyricsBgColor,
-      songTitle: song.currentSongTitle,
-    })
+    broadcast('FULL_STATE', buildFullState())
   }, [broadcast])
 
   // Initialize PieSocket connection (lazily — see obsSyncEnabled)

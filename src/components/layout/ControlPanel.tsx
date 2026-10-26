@@ -9,6 +9,7 @@ import { AudioPlayer } from '../playback/AudioPlayer'
 import { OffsetControls } from '../playback/OffsetControls'
 import { PitchControls } from '../playback/PitchControls'
 import { DisplaySettings } from '../settings/DisplaySettings'
+import { OBSPreview } from '../settings/OBSPreview'
 import { SaveStatusIndicator } from './SaveStatusIndicator'
 import type { Song } from '@/types'
 import type { usePlaybackEngine } from '@/hooks/usePlaybackEngine'
@@ -147,6 +148,9 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
           </p>
         )}
       </section>
+
+      {/* OBS 預覽（可收合） */}
+      <OBSPreview />
 
       {/* 顯示設定（可收合） */}
       <DisplaySettings />
