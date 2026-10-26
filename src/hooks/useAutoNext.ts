@@ -24,16 +24,31 @@ const READY_POLL_MS = 100
  */
 async function playWhenReady(songId: number, engine: ReturnType<typeof usePlaybackEngine>): Promise<void> {
   const deadline = Date.now() + READY_TIMEOUT_MS
+  // For local songs the stored file is restored asynchronously after selectSong;
+  // until the object URL exists the engine would fall back to the manual timer,
+  // so wait for it (and give up if there is no stored copy to restore).
+  let hasStoredFile: boolean | null = null
   while (Date.now() < deadline) {
     const song = useSongStore.getState()
     if (song.currentSongId !== songId) return
     const playback = usePlaybackStore.getState()
     if (playback.status === 'PLAYING') return
 
-    const hasAudio =
-      (song.audioSource === 'youtube' && !!song.youtubeId) ||
-      (song.audioSource === 'local' && !!playback.audioFileObjectUrl)
-    const ready = hasAudio ? playback.duration > 0 : song.lyrics.length > 0 // manual timer
+    let ready: boolean
+    if (song.audioSource === 'local') {
+      if (!playback.audioFileObjectUrl) {
+        hasStoredFile ??= !!(await db.audioFiles.get(songId))
+        if (!hasStoredFile) return // needs the file picker — cannot autoplay
+        ready = false
+      } else {
+        ready = playback.duration > 0
+      }
+    } else if (song.youtubeId) {
+      ready = playback.duration > 0
+    } else {
+      ready = song.lyrics.length > 0 // manual timer
+    }
+
     if (ready) {
       engine.play()
       return
@@ -81,8 +96,9 @@ export function useAutoNext(engine: ReturnType<typeof usePlaybackEngine>) {
       if (s.currentSongId !== currentSongId || usePlaybackStore.getState().status !== 'ENDED') return
       const next = all.find((song) => song.id === nextId)
       if (!next) return
+      // From here on we are committed: selectSong changes currentSongId, which
+      // re-runs this effect and flips `cancelled` — that must not stop playback.
       await selectSong(next)
-      if (cancelled) return
       void playWhenReady(next.id, engine)
     }, AUTO_NEXT_DELAY_MS)
     return () => {
