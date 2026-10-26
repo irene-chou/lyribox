@@ -13,6 +13,7 @@
 - 深色 / 淺色主題切換
 - 歌曲庫管理（IndexedDB 本地儲存）
 - 歌曲匯入 / 匯出（JSON 格式）
+- PWA：可安裝到桌面／手機主畫面，離線仍可開啟歌庫與本地音檔
 
 ## 快速開始
 
@@ -74,6 +75,10 @@ npm run dev
 - PieSocket（WebSocket 同步）
 - Vitest（單元測試）
 - shadcn/ui + Radix UI + Lucide Icons
+
+## PWA
+
+已設定 manifest 與 service worker（`vite-plugin-pwa`）。瀏覽器網址列會出現「安裝」提示；安裝後離線也能使用歌庫與已持久化的本地音檔（YouTube、OBS 同步需要網路）。有新版本時畫面會跳出「有新版本可用」toast，按「重新載入」才會更新，不會在唱歌中途自動重整。圖示由 `node scripts/generate-pwa-icons.mjs` 產生。
 
 ## 部署
 
