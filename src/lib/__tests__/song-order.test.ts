@@ -3,7 +3,7 @@ import { orderSongs, adjacentSong } from '../song-order'
 import type { Song, Folder } from '@/types'
 
 function song(id: number, name: string, folderId: number | null = null): Song {
-  return { id, name, lrcText: '', offset: 0, pitch: 0, audioSource: 'youtube', youtubeId: null, audioFileName: null, folderId, createdAt: id, updatedAt: id }
+  return { id, name, lrcText: '', offset: 0, pitch: 0, vocalRemoval: false, audioSource: 'youtube', youtubeId: null, audioFileName: null, folderId, createdAt: id, updatedAt: id }
 }
 function folder(id: number, name: string): Folder {
   return { id, name, createdAt: id, updatedAt: id }

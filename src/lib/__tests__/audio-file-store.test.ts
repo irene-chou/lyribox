@@ -58,6 +58,7 @@ describe('audio-file-store', () => {
       lrcText: '',
       offset: 0,
       pitch: 0,
+      vocalRemoval: false,
       audioSource: 'local',
       youtubeId: null,
       audioFileName: 'a.mp3',

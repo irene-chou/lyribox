@@ -18,6 +18,8 @@ export interface Song {
   lrcText: string
   offset: number
   pitch: number
+  /** Center-channel cancellation (去人聲) for local audio. */
+  vocalRemoval: boolean
   audioSource: AudioSource
   youtubeId: string | null
   audioFileName: string | null

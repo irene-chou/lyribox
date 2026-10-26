@@ -60,7 +60,8 @@ src/
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
     analytics.ts          # track(event, data) → Umami custom events; no-op unless Umami is injected. Sends song title / youtube id, never lyrics or local file names
-    playback-actions.ts   # adjustOffset/setPitch/etc. — store update + active-line resync + debounced save
+    playback-actions.ts   # adjustOffset/setPitch/toggleVocalRemoval/etc. — store update + active-line resync + debounced save
+    vocal-removal.ts      # removeCenterChannel(): (L−R)/2 side signal for 去人聲, pure Float32Array math
     song-selection.ts     # selectSong() (handles local-file prompt), navigateSong(±1), pickLocalAudioFile()
     song-order.ts         # orderSongs() (folders A→Z then uncategorized), adjacentSong()
     utils.ts              # cn() (clsx + tailwind-merge)
@@ -105,6 +106,7 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 ### Audio Sources
 - **YouTube:** IFrame API loaded lazily (singleton pattern), managed by `useYouTubePlayer`
 - **Local files:** decoded to an `AudioBuffer` and played through a Signalsmith Stretch AudioWorklet (`lib/stretch-player.ts`, wraps the `signalsmith-stretch` WASM package) via `useLocalAudioPlayer`; pitch (升降 Key) is applied in real time, no reprocessing. The library is imported with `?url` + dynamic import so the bundler never minifies its self-stringifying worklet code.
+- **去人聲 (vocal removal):** per-song `Song.vocalRemoval` flag (local audio only, toggle in `PitchControls`). `lib/vocal-removal.ts` computes the `(L−R)/2` side signal from the decoded channels; `useLocalAudioPlayer` caches both variants and swaps the worklet buffers in place, preserving position and play state. Mono files are unaffected.
 - **Stored local files:** picked files are optionally persisted as Blobs in the `audioFiles` Dexie table (`lib/audio-file-store.ts`, keyed by songId, separate from `songs` so list queries stay light); `useLocalAudioRestore` reloads them when a song is selected. Preference lives in `useUISettingsStore.persistLocalAudio`.
 - **Manual timer:** Fallback when lyrics exist but no audio source is configured
 - All three sources share the docked `TransportBar` under the lyrics (play/pause, ±5s, progress, offset ±0.1, volume; 歸零 for manual). The sidebar `AudioPlayer` only shows the YouTube iframe / local file picker / manual hint.
@@ -132,7 +134,7 @@ Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `
 ### Dialogs & Toasts
 - Never use native `alert` / `confirm` / `prompt`. Use `confirmDialog()` / `promptDialog()` from `stores/useDialogStore` (promise-based) and `toast()` from `stores/useToastStore`.
 - Destructive actions (delete song / folder) execute immediately and show a toast with 「復原」; `deleteFolder` returns the moved song ids for `restoreFolder`.
-- Offset / pitch changes go through `lib/playback-actions.ts`, which recomputes the active line immediately (no `setCurrentLineIndex(-1)` flash) and schedules `debouncedSaveSong`; `SaveStatusIndicator` reflects `useSaveStatusStore`.
+- Offset / pitch / 去人聲 changes go through `lib/playback-actions.ts`, which recomputes the active line immediately (no `setCurrentLineIndex(-1)` flash) and schedules `debouncedSaveSong`; `SaveStatusIndicator` reflects `useSaveStatusStore`.
 
 ## Styling
 
@@ -162,7 +164,7 @@ Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `
 Dexie v4 (IndexedDB wrapper):
 - Database name: `lyribox-db`
 - Single table: `songs` with `id` as integer primary key
-- `Song` schema: `{ id, name, lrcText, offset, audioSource, youtubeId, audioFileName, createdAt, updatedAt }`
+- `Song` schema: `{ id, name, lrcText, offset, pitch, vocalRemoval, audioSource, youtubeId, audioFileName, folderId, createdAt, updatedAt }` (v5 upgrade backfills `vocalRemoval: false`)
 - Import validation via `isValidSong()`: checks id > 0, name 1-500 chars, valid audioSource enum, strips unknown properties
 
 ## Testing

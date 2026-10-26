@@ -1,12 +1,13 @@
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, MicOff } from 'lucide-react'
 import { useSongStore } from '@/stores/useSongStore'
-import { adjustPitch, resetPitch } from '@/lib/playback-actions'
+import { adjustPitch, resetPitch, toggleVocalRemoval } from '@/lib/playback-actions'
 import { CONTROL_BTN_CLASS, OFFSET_BTN_STYLE, ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 
 export function PitchControls() {
   const currentSongId = useSongStore((s) => s.currentSongId)
   const audioSource = useSongStore((s) => s.audioSource)
   const pitch = useSongStore((s) => s.pitch)
+  const vocalRemoval = useSongStore((s) => s.vocalRemoval)
 
   // Only show for local audio (YouTube doesn't support pitch shifting)
   if (!currentSongId || audioSource !== 'local') return null
@@ -25,9 +26,25 @@ export function PitchControls() {
         >
           升降 Key (Pitch)
         </div>
-        <button className={ICON_BTN_CLASS} onClick={resetPitch} title="重置 Key" style={ICON_BTN_STYLE}>
-          <RotateCcw size={14} />
-        </button>
+        <div className="flex items-center" style={{ gap: '2px' }}>
+          <button
+            className={ICON_BTN_CLASS}
+            onClick={toggleVocalRemoval}
+            title="去人聲（效果視歌曲混音而定）"
+            aria-label="去人聲"
+            aria-pressed={vocalRemoval}
+            style={
+              vocalRemoval
+                ? { ...ICON_BTN_STYLE, color: 'var(--lb-accent)', background: 'var(--lb-active-bg)' }
+                : ICON_BTN_STYLE
+            }
+          >
+            <MicOff size={14} />
+          </button>
+          <button className={ICON_BTN_CLASS} onClick={resetPitch} title="重置 Key" style={ICON_BTN_STYLE}>
+            <RotateCcw size={14} />
+          </button>
+        </div>
       </div>
       <div className="flex items-center justify-center" style={{ gap: '6px' }}>
         <button className={CONTROL_BTN_CLASS} onClick={() => adjustPitch(-1)} style={OFFSET_BTN_STYLE} title="降 1 Key">
