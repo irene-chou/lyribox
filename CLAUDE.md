@@ -59,6 +59,7 @@ src/
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     obs-state.ts          # buildFullState() — FULL_STATE payload shared by PieSocket broadcast and preview
     obs-preview-bridge.ts # In-page pub/sub mirroring outgoing SyncMessages to the embedded OBS preview
+    obs-params.ts         # parseObsParams(): URL query overrides for obs.html (align/shadow/anim/before/after/size/otherSize/title/bg); obs.html keeps an inline copy
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
     analytics.ts          # track(event, data) → Umami custom events; no-op unless Umami is injected. Sends song title / youtube id, never lyrics or local file names
