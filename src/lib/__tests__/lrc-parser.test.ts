@@ -87,4 +87,54 @@ describe('parseLRC', () => {
     const { lyrics } = parseLRC(lrc)
     expect(lyrics[0].time).toBe(7200)
   })
+
+  describe('same-timestamp merging (translation / romanization)', () => {
+    it('merges a following line with the same timestamp into subText', () => {
+      const lrc = '[00:12.30]君の名前を呼ぶ\n[00:12.30]呼喚你的名字\n[00:15.00]Next'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(2)
+      expect(lyrics[0]).toEqual({ time: 12.3, text: '君の名前を呼ぶ', subText: '呼喚你的名字' })
+      expect(lyrics[1]).toEqual({ time: 15, text: 'Next' })
+    })
+
+    it('joins three or more same-timestamp lines with newlines', () => {
+      const lrc = '[00:01.00]原文\n[00:01.00]翻譲\n[00:01.00]romaji'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0].subText).toBe('翻譲\nromaji')
+    })
+
+    it('treats differently formatted but equal timestamps as the same', () => {
+      const lrc = '[00:01.50]A\n[00:01.500]B'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0].subText).toBe('B')
+    })
+
+    it('promotes the first non-empty text to the primary line', () => {
+      const lrc = '[00:01.00]\n[00:01.00]Hello'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0]).toEqual({ time: 1, text: 'Hello' })
+    })
+
+    it('keeps a single empty line when all same-timestamp lines are empty', () => {
+      const lrc = '[00:01.00]\n[00:01.00]'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toEqual([{ time: 1, text: '' }])
+    })
+
+    it('does not produce subText when the duplicate text is identical', () => {
+      const lrc = '[00:01.00][00:01.00]Same'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toEqual([{ time: 1, text: 'Same' }])
+    })
+
+    it('keeps the original order when merging after sort', () => {
+      const lrc = '[00:20.00]Late\n[00:10.00]Orig\n[00:10.00]Trans'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics.map((l) => l.text)).toEqual(['Orig', 'Late'])
+      expect(lyrics[0].subText).toBe('Trans')
+    })
+  })
 })

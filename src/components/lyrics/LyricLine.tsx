@@ -85,6 +85,21 @@ export const LyricLine = memo(
         title={onClick ? '點擊跳到此句' : undefined}
       >
         {isInterlude ? '♪' : line.text}
+        {!isInterlude && line.subText && (
+          <div
+            style={{
+              fontSize: `${Math.round(fontSize * 0.6)}px`,
+              fontWeight: 400,
+              lineHeight: 1.4,
+              opacity: 0.75,
+              marginTop: '2px',
+              whiteSpace: 'pre-line',
+              transition: 'font-size 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)',
+            }}
+          >
+            {line.subText}
+          </div>
+        )}
       </div>
     )
   }),

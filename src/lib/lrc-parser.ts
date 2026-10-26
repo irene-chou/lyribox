@@ -51,7 +51,34 @@ export function parseLRC(text: string): ParseResult {
     }
   }
 
-  // Sort by time
+  // Sort by time (stable, so same-timestamp lines keep file order)
   result.sort((a, b) => a.time - b.time)
-  return { lyrics: result, title }
+  return { lyrics: mergeSameTimestamp(result), title }
+}
+
+/**
+ * Collapse consecutive lines sharing a timestamp into one line. The first
+ * non-empty text becomes the primary line; the rest become `subText`
+ * (translation / romanization convention used by many LRC exporters).
+ */
+function mergeSameTimestamp(sorted: LyricLine[]): LyricLine[] {
+  const merged: LyricLine[] = []
+  let i = 0
+  while (i < sorted.length) {
+    const time = sorted[i].time
+    const texts: string[] = []
+    while (i < sorted.length && Math.abs(sorted[i].time - time) < 0.0005) {
+      const text = sorted[i].text
+      if (text && !texts.includes(text)) texts.push(text)
+      i++
+    }
+    if (texts.length === 0) {
+      merged.push({ time, text: '' })
+    } else if (texts.length === 1) {
+      merged.push({ time, text: texts[0] })
+    } else {
+      merged.push({ time, text: texts[0], subText: texts.slice(1).join('\n') })
+    }
+  }
+  return merged
 }
