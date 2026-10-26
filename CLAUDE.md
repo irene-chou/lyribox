@@ -28,7 +28,7 @@ src/
     layout/               # AppLayout (sidebar resize, mobile overlay), Header, ControlPanel, SaveStatusIndicator, ShortcutsDialog
     lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
-    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    settings/             # DisplaySettings (collapsible), CloudBackupSettings (Gist backup, collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
     song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
@@ -41,6 +41,7 @@ src/
     useLocalAudioPlayer.ts # HTMLAudioElement wrapper
     useManualTimer.ts     # Manual timer (performance.now()-based, polled by sync engine)
     useSongLibrary.ts     # Dexie live query + re-exports song-service functions
+    useAutoBackup.ts      # Debounced (30s) Gist backup after any songs/folders live-query change when autoBackup is on
     useKeyboardShortcuts.ts # Global keyboard shortcuts (table lives in lib/shortcuts.ts)
     useIsMobile.ts        # matchMedia breakpoint (768px)
   stores/
@@ -53,7 +54,9 @@ src/
     useSaveStatusStore.ts # idle | pending | saving | saved, driven by song-service
   lib/
     db.ts                 # Dexie instance ('lyribox-db', songs table)
-    song-service.ts       # CRUD, export/import, validation for songs
+    song-service.ts       # CRUD, export/import, validation for songs (getLibrarySnapshot / importLibrary shared with cloud backup)
+    gist-backup.ts        # Pure GitHub Gist API calls + mergeLibraries (newer updatedAt wins)
+    cloud-backup.ts       # backupNow / restoreFromCloud orchestration, token in localStorage['lb-gist-token'] (never in the settings store)
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
     format.ts             # formatTime(), extractVideoId()
     piesocket.ts          # Session ID, channel name, OBS URL helpers
