@@ -216,7 +216,7 @@ export function AppLayout() {
         )}
 
         {modalMounted && (
-          <SongModal open={modalOpen} onOpenChange={setModalOpen} editSong={editSong} />
+          <SongModal open={modalOpen} onOpenChange={setModalOpen} editSong={editSong} engine={engine} />
         )}
       </Suspense>
     </div>

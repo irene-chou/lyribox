@@ -30,7 +30,7 @@ src/
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
-    song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
+    song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab, LrcTimingTab (打軸: Enter stamps current playback time per line)
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
   hooks/
     usePlaybackEngine.ts  # Unified facade routing to youtube/local/manual player
@@ -55,6 +55,7 @@ src/
     db.ts                 # Dexie instance ('lyribox-db', songs table)
     song-service.ts       # CRUD, export/import, validation for songs
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
+    lrc-timing.ts         # Line-oriented LRC model for the 打軸 editor (stamp/clear/adjust, LRC ⇄ lines)
     format.ts             # formatTime(), extractVideoId()
     piesocket.ts          # Session ID, channel name, OBS URL helpers
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
