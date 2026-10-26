@@ -5,6 +5,33 @@ export interface ParseResult {
   title: string | null
 }
 
+// Matches [mm:ss.xx], [mm:ss:xx] and [mm:ss]
+const TIME_TAG_SOURCE = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/.source
+
+/** True for LRC metadata lines such as [ti:], [ar:], [offset:]. */
+export function isMetadataLine(line: string): boolean {
+  return /^\[(?:ti|ar|al|by|offset|re|ve):/i.test(line)
+}
+
+/** Extract every time tag on a line (in seconds) plus the remaining text. */
+export function parseTimeTags(line: string): { times: number[]; text: string } {
+  const regex = new RegExp(TIME_TAG_SOURCE, 'g')
+  const times: number[] = []
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(line)) !== null) {
+    const min = parseInt(match[1])
+    const sec = parseInt(match[2])
+    let ms = 0
+    if (match[3]) {
+      const msStr = match[3]
+      ms = msStr.length === 3 ? parseInt(msStr) : parseInt(msStr) * 10
+    }
+    times.push(min * 60 + sec + ms / 1000)
+  }
+  const text = line.replace(new RegExp(TIME_TAG_SOURCE, 'g'), '').trim()
+  return { times, text }
+}
+
 /**
  * Parse LRC format text into an array of timed lyric lines.
  * Supports multiple time tags on the same line.
@@ -24,30 +51,11 @@ export function parseLRC(text: string): ParseResult {
   }
 
   for (const line of lines) {
-    // Skip metadata tags
-    if (/^\[(?:ti|ar|al|by|offset|re|ve):/i.test(line)) continue
+    if (isMetadataLine(line)) continue
 
-    // Match multiple time tags: [mm:ss.xx] or [mm:ss:xx] or [mm:ss]
-    const timeRegex = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g
-    const times: number[] = []
-    let match: RegExpExecArray | null
-
-    while ((match = timeRegex.exec(line)) !== null) {
-      const min = parseInt(match[1])
-      const sec = parseInt(match[2])
-      let ms = 0
-      if (match[3]) {
-        const msStr = match[3]
-        ms = msStr.length === 3 ? parseInt(msStr) : parseInt(msStr) * 10
-      }
-      times.push(min * 60 + sec + ms / 1000)
-    }
-
-    // Extract text (everything after the last time tag)
-    const textPart = line.replace(/\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]/g, '').trim()
-
+    const { times, text } = parseTimeTags(line)
     for (const t of times) {
-      result.push({ time: t, text: textPart })
+      result.push({ time: t, text })
     }
   }
 
