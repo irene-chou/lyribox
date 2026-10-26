@@ -41,6 +41,8 @@ export {
   deleteSongFromDB,
   exportSongs,
   importSongs,
+  importLibrary,
+  getLibrarySnapshot,
   createFolder,
   updateFolder,
   deleteFolder,

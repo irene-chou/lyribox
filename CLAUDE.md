@@ -33,6 +33,7 @@ src/
     lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
     playback/             # TransportBar (docked play/seek/progress/offset/volume; WaveformBar canvas replaces the progress bar for decoded local files), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    settings/             # DisplaySettings (collapsible), CloudBackupSettings (Gist backup, collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection, PlaylistSection (歌單: reorder, 歌單模式, 自動下一首)
@@ -49,6 +50,7 @@ src/
     useManualTimer.ts     # Manual timer (performance.now()-based, polled by sync engine)
     useAutoNext.ts        # Playlist glue: derives nextSongTitle for OBS, auto-loads/plays next playlist song on ENDED
     useSongLibrary.ts     # Dexie live query + re-exports song-service functions
+    useAutoBackup.ts      # Debounced (30s) Gist backup after any songs/folders live-query change when autoBackup is on
     useKeyboardShortcuts.ts # Global keyboard shortcuts (table lives in lib/shortcuts.ts)
     useIsMobile.ts        # matchMedia breakpoint (768px)
   stores/
@@ -65,6 +67,9 @@ src/
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization, Enhanced LRC `<mm:ss.xx>` word tags → `words` / `endTime`)
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization); exports parseTimeTags()/isMetadataLine()
     lrc-merge.ts          # mergeTranslationLrc(): attach a separate translation/romanization LRC to the nearest primary timestamps (±0.3s) as duplicate-timestamp lines; formatTimeTag()
+    song-service.ts       # CRUD, export/import, validation for songs (getLibrarySnapshot / importLibrary shared with cloud backup)
+    gist-backup.ts        # Pure GitHub Gist API calls + mergeLibraries (newer updatedAt wins)
+    cloud-backup.ts       # backupNow / restoreFromCloud orchestration, token in localStorage['lb-gist-token'] (never in the settings store)
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
     lrc-timing.ts         # Line-oriented LRC model for the 打軸 editor (stamp/clear/adjust, LRC ⇄ lines)
     format.ts             # formatTime(), extractVideoId()

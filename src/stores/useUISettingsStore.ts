@@ -26,6 +26,14 @@ interface UISettingsState extends UISettings {
   autoNext: boolean
   /** Whether the 歌單 section in the song drawer is expanded. */
   playlistOpen: boolean
+  /** Whether the "雲端備份" panel is expanded (not part of resetAll). */
+  cloudBackupOpen: boolean
+  /** Id of the GitHub Gist holding the library backup (not part of resetAll). */
+  gistId: string | null
+  /** Auto-backup to the gist ~30s after library changes (not part of resetAll). */
+  autoBackup: boolean
+  /** Epoch ms of the last successful backup (not part of resetAll). */
+  lastBackupAt: number | null
 
   setActiveFontSize: (size: number) => void
   setOtherFontSize: (size: number) => void
@@ -47,6 +55,10 @@ interface UISettingsState extends UISettings {
   setPlaylistEnabled: (enabled: boolean) => void
   setAutoNext: (enabled: boolean) => void
   setPlaylistOpen: (open: boolean) => void
+  setCloudBackupOpen: (open: boolean) => void
+  setGistId: (id: string | null) => void
+  setAutoBackup: (enabled: boolean) => void
+  setLastBackupAt: (at: number | null) => void
   resetAll: () => void
 }
 
@@ -75,6 +87,10 @@ export const useUISettingsStore = create<UISettingsState>()(
       playlistEnabled: false,
       autoNext: false,
       playlistOpen: true,
+      cloudBackupOpen: false,
+      gistId: null,
+      autoBackup: false,
+      lastBackupAt: null,
 
       setActiveFontSize: (size: number) => set({ activeFontSize: size }),
       setOtherFontSize: (size: number) => set({ otherFontSize: size }),
@@ -96,6 +112,10 @@ export const useUISettingsStore = create<UISettingsState>()(
       setPlaylistEnabled: (enabled: boolean) => set({ playlistEnabled: enabled }),
       setAutoNext: (enabled: boolean) => set({ autoNext: enabled }),
       setPlaylistOpen: (open: boolean) => set({ playlistOpen: open }),
+      setCloudBackupOpen: (open: boolean) => set({ cloudBackupOpen: open }),
+      setGistId: (id: string | null) => set({ gistId: id }),
+      setAutoBackup: (enabled: boolean) => set({ autoBackup: enabled }),
+      setLastBackupAt: (at: number | null) => set({ lastBackupAt: at }),
       resetAll: () => set({ ...DEFAULT_UI_SETTINGS }),
     }),
     {
