@@ -41,6 +41,12 @@ describe('removeCenterChannel', () => {
     expect(toneAmp(l, 60)).toBeGreaterThan(0.35)
   })
 
+  it('drops centered highs (vocal sibilance)', () => {
+    const hiss = sine(9000, 0.4)
+    const [l] = removeCenterChannel([hiss, hiss.slice()], SR)
+    expect(toneAmp(l, 9000)).toBeLessThan(0.001)
+  })
+
   it('keeps hard-panned content and its stereo image', () => {
     const guitar = sine(1000, 0.5)
     const [l, r] = removeCenterChannel([guitar, new Float32Array(guitar.length)], SR)
@@ -49,13 +55,13 @@ describe('removeCenterChannel', () => {
     expect(rms(add(l, r))).toBeLessThan(rms(l) * 0.1)
   })
 
-  it('restores the original loudness when it can', () => {
+  it('brings the side signal up to the original peak', () => {
     const left = add(sine(1000, 0.3), sine(440, 0.2))
     const right = sine(1000, 0.3)
     const [l, r] = removeCenterChannel([left, right], SR)
     const outRms = Math.hypot(rms(l), rms(r))
     const inRms = Math.hypot(rms(left), rms(right))
-    // Capped by the original peak, but far louder than the raw (L−R)/2
+    // Side boosted up to 4×, still capped by the original peak
     expect(outRms).toBeGreaterThan(inRms * 0.4)
     expect(peak(l)).toBeLessThanOrEqual(Math.max(peak(left), peak(right)) + 1e-6)
   })
@@ -64,7 +70,7 @@ describe('removeCenterChannel', () => {
     const left = sine(1000, 0.5)
     const right = sine(1000, 0.495)
     const [l] = removeCenterChannel([left, right], SR)
-    // raw side amplitude is 0.0025, plus ~-60 dB mid leakage through the filters
+    // raw side amplitude is 0.0025
     expect(toneAmp(l, 1000)).toBeLessThanOrEqual(0.0025 * 4 * 1.2)
   })
 
