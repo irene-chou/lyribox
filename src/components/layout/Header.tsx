@@ -173,34 +173,6 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
 
         {!isMobile && <span aria-hidden className="bg-lb-border" style={{ width: '1px', height: '18px', margin: '0 4px' }} />}
 
-        {/* External links */}
-        <a
-          href={KOFI_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => track('kofi_click')}
-          className={iconBtn}
-          style={iconBtnStyle}
-          title="在 Ko-fi 支持作者"
-          aria-label="在 Ko-fi 支持作者"
-        >
-          <Coffee size={isMobile ? 18 : 20} />
-        </a>
-
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={iconBtn}
-          style={iconBtnStyle}
-          title="GitHub"
-          aria-label="GitHub"
-        >
-          <GithubMark size={isMobile ? 18 : 20} />
-        </a>
-
-        {!isMobile && <span aria-hidden className="bg-lb-border" style={{ width: '1px', height: '18px', margin: '0 4px' }} />}
-
         {/* New song */}
         {isMobile ? (
           <button onClick={onNewSong} className={iconBtn} style={iconBtnStyle} title="新增歌曲" aria-label="新增歌曲">
@@ -253,6 +225,34 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
             </kbd>
           </button>
         )}
+
+        {!isMobile && <span aria-hidden className="bg-lb-border" style={{ width: '1px', height: '18px', margin: '0 4px' }} />}
+
+        {/* External links */}
+        <a
+          href={KOFI_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => track('kofi_click')}
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="在 Ko-fi 支持作者"
+          aria-label="在 Ko-fi 支持作者"
+        >
+          <Coffee size={isMobile ? 18 : 20} />
+        </a>
+
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="GitHub"
+          aria-label="GitHub"
+        >
+          <GithubMark size={isMobile ? 18 : 20} />
+        </a>
       </div>
     </header>
   )
