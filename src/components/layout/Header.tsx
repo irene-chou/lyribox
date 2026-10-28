@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, ChevronDown, Settings2, Heart } from 'lucide-react'
+import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, ChevronDown, Settings2, Coffee } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,7 +108,7 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
           title="在 Ko-fi 支持作者"
           aria-label="在 Ko-fi 支持作者"
         >
-          <Heart size={isMobile ? 18 : 20} />
+          <Coffee size={isMobile ? 18 : 20} />
         </a>
 
         {/* OBS URL: split button — main part copies the default URL, chevron lists presets */}
