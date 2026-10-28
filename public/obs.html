@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Follow the embedder's colour scheme so the ?preview=1 iframe stays transparent
+     (a light/dark mismatch makes Chrome paint an opaque white canvas behind the page). -->
+<meta name="color-scheme" content="light dark">
 <title>Lyribox - OBS Display</title>
 <script src="https://unpkg.com/piesocket-js@5.2.0/dist/piesocket.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -71,6 +74,29 @@
     letter-spacing: 0.05em;
   }
 
+  /* URL param overrides (see parseObsParams below) */
+  body.shadow .lyric-line,
+  body.shadow .now-singing-title,
+  body.shadow .now-singing-label {
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  body.no-anim .lyric-line {
+    transition: none;
+  }
+  /* Enhanced LRC word fill: dimmed base + clipped overlay in the active color */
+  .lyric-word { position: relative; display: inline-block; white-space: pre; }
+  .lyric-word-base { opacity: 0.6; }
+  .lyric-word-fill { position: absolute; inset: 0; clip-path: inset(0 100% 0 0); }
+
+  .lyric-sub {
+    font-size: 0.6em;
+    font-weight: 400;
+    line-height: 1.4;
+    opacity: 0.75;
+    margin-top: 2px;
+    white-space: pre-line;
+  }
+
   .now-singing {
     display: none;
     flex-direction: column;
@@ -93,6 +119,16 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .now-singing-next {
+    display: none;
+    font-weight: 400;
+    font-size: 13px;
+    color: #ffffff;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .waiting {
     display: flex;
@@ -110,6 +146,7 @@
 <div class="now-singing" id="nowSinging">
   <span class="now-singing-label">Now singing</span>
   <span class="now-singing-title" id="nowSingingTitle"></span>
+  <span class="now-singing-next" id="nowSingingNext"></span>
 </div>
 <div class="lyrics-scroll-container" id="lyricsContainer">
   <div class="waiting" id="waitingState">等待控制頁面連線...</div>
@@ -130,6 +167,12 @@
   let passedColor = '#5a5a70';
   let lyricsBgColor = 'transparent';
   let songTitle = '';
+  let nextSongTitle = null;
+  // Word-level timing: last offset-applied time from the control page and when it arrived
+  let syncTime = null;
+  let syncPerf = 0;
+  let wordRaf = null;
+  const MAX_EXTRAPOLATION_S = 0.3;
   let syncChannel = null;
   let gotState = false;
   // After a (re)connect, retry the state request a couple of times if nothing
@@ -144,34 +187,210 @@
     }, ms));
   }
 
+  // ========== URL param overrides ==========
+  // Inline copy of src/lib/obs-params.ts `parseObsParams` (this page cannot import
+  // modules). Keep the two in sync. Values here win over synced settings so several
+  // OBS sources on one session can look different.
+  function parseObsParams(search) {
+    const q = new URLSearchParams(search);
+    const out = {};
+    const flag = (v) => (v === '1' || v === 'true') ? true : (v === '0' || v === 'false') ? false : undefined;
+    const int = (v, min, max) => {
+      if (v === null || !/^\d+$/.test(v.trim())) return undefined;
+      const n = Number(v);
+      return n >= min && n <= max ? n : undefined;
+    };
+    const align = q.get('align');
+    if (['left', 'center', 'right'].includes(align)) out.align = align;
+    const shadow = flag(q.get('shadow')); if (shadow !== undefined) out.shadow = shadow;
+    const anim = flag(q.get('anim')); if (anim !== undefined) out.anim = anim;
+    const title = flag(q.get('title')); if (title !== undefined) out.title = title;
+    const before = int(q.get('before'), 0, 50); if (before !== undefined) out.before = before;
+    const after = int(q.get('after'), 0, 50); if (after !== undefined) out.after = after;
+    const size = int(q.get('size'), 8, 300); if (size !== undefined) out.size = size;
+    const otherSize = int(q.get('otherSize'), 8, 300); if (otherSize !== undefined) out.otherSize = otherSize;
+    const bg = (q.get('bg') || '').trim();
+    if (bg && bg.length <= 64 && /^(#[0-9a-f]{3,8}|[a-z]+|(?:rgba?|hsla?)\([\d.,%\s/]+\))$/i.test(bg)) out.bg = bg;
+    return out;
+  }
+
+  const overrides = parseObsParams(window.location.search);
+
+  // Single resolution step: URL override ?? value synced from the control page.
+  // Every render/update path reads through this so overrides survive any sync message.
+  function effective() {
+    return {
+      activeFontSize: overrides.size ?? activeFontSize,
+      otherFontSize: overrides.otherSize ?? otherFontSize,
+      visibleBefore: overrides.before ?? visibleBefore,
+      visibleAfter: overrides.after ?? visibleAfter,
+      showTitle: overrides.title ?? showTitle,
+      lyricsBgColor: overrides.bg ?? lyricsBgColor,
+    };
+  }
+
+  // Static overrides applied once
+  if (overrides.align) document.getElementById('lyricsContainer').style.textAlign = overrides.align;
+  if (overrides.shadow) document.body.classList.add('shadow');
+  if (overrides.anim === false) document.body.classList.add('no-anim');
+
   function applyGap() {
     document.getElementById('lyricsContainer').style.gap = lyricsGap + 'px';
   }
 
   function applyColors() {
-    document.body.style.background = lyricsBgColor === 'transparent' ? 'transparent' : lyricsBgColor;
+    const bg = effective().lyricsBgColor;
+    document.body.style.background = bg === 'transparent' ? 'transparent' : bg;
   }
 
   function updateNowSinging() {
     const el = document.getElementById('nowSinging');
     const titleEl = document.getElementById('nowSingingTitle');
     const labelEl = document.querySelector('.now-singing-label');
-    if (showTitle && songTitle && lyrics.length > 0) {
+    if (effective().showTitle && songTitle && lyrics.length > 0) {
       titleEl.textContent = songTitle;
       labelEl.style.fontSize = Math.round(titleFontSize * 0.72) + 'px';
       titleEl.style.fontSize = titleFontSize + 'px';
+      const nextEl = document.getElementById('nowSingingNext');
+      if (nextSongTitle) {
+        nextEl.textContent = '\u4E0B\u4E00\u9996\uFF1A' + nextSongTitle;
+        nextEl.style.fontSize = Math.round(titleFontSize * 0.72) + 'px';
+        nextEl.style.display = 'block';
+      } else {
+        nextEl.style.display = 'none';
+      }
       el.style.display = 'flex';
     } else {
       el.style.display = 'none';
     }
   }
 
-  // ========== PieSocket (OBS Sync) ==========
+  // Fallbacks used when a patch carries an empty/undefined value
+  const SETTING_DEFAULTS = {
+    activeFontSize: 32,
+    otherFontSize: 28,
+    titleFontSize: 18,
+    showTitle: true,
+    lyricsGap: 16,
+    visibleBefore: 0,
+    visibleAfter: 1,
+    activeColor: '#ffffff',
+    otherColor: '#9090a8',
+    passedColor: '#5a5a70',
+    lyricsBgColor: 'transparent',
+  };
+
+  /**
+   * Apply a (partial) settings object. Only keys present in `patch` are
+   * touched; each re-render step runs at most once per call.
+   */
+  function applySettings(patch, { render = true } = {}) {
+    if (!patch || typeof patch !== 'object') return;
+    const has = (k) => Object.prototype.hasOwnProperty.call(patch, k);
+    const num = (k) => (typeof patch[k] === 'number' && !Number.isNaN(patch[k]) ? patch[k] : SETTING_DEFAULTS[k]);
+    const str = (k) => (patch[k] ? patch[k] : SETTING_DEFAULTS[k]);
+    let needLines = false, needTitle = false, needColors = false, needGap = false;
+
+    if (has('activeFontSize')) { activeFontSize = num('activeFontSize'); needLines = true; }
+    if (has('otherFontSize')) { otherFontSize = num('otherFontSize'); needLines = true; }
+    if (has('visibleBefore')) { visibleBefore = num('visibleBefore'); needLines = true; }
+    if (has('visibleAfter')) { visibleAfter = num('visibleAfter'); needLines = true; }
+    if (has('activeColor')) { activeColor = str('activeColor'); needLines = true; }
+    if (has('otherColor')) { otherColor = str('otherColor'); needLines = true; }
+    if (has('passedColor')) { passedColor = str('passedColor'); needLines = true; }
+    if (has('lyricsBgColor')) { lyricsBgColor = str('lyricsBgColor'); needColors = true; }
+    if (has('titleFontSize')) { titleFontSize = num('titleFontSize'); needTitle = true; }
+    if (has('showTitle')) { showTitle = patch.showTitle ?? SETTING_DEFAULTS.showTitle; needTitle = true; }
+    if (has('lyricsGap')) { lyricsGap = num('lyricsGap'); needGap = true; }
+
+    if (!render) return;
+    if (needLines) updateActiveLine();
+    if (needTitle) updateNowSinging();
+    if (needColors) applyColors();
+    if (needGap) applyGap();
+  }
+
+  // ========== Message handling (shared by PieSocket and preview mode) ==========
+  function handleMessage(msg) {
+    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
+    const { type, data } = msg;
+    if (type === 'FULL_STATE' || type === 'LYRICS_LOADED') gotState = true;
+    switch (type) {
+      case 'FULL_STATE':
+        lyrics = data.lyrics || [];
+        currentLineIndex = data.currentLineIndex;
+        songTitle = data.songTitle || '';
+        nextSongTitle = data.nextSongTitle || null;
+        syncTime = null;
+        // v2 nests settings; v1 spread them at top level
+        applySettings(data.settings || data, { render: false });
+        renderLyrics();
+        updateActiveLine();
+        updateNowSinging();
+        applyColors();
+        applyGap();
+        break;
+      case 'LYRICS_LOADED':
+        lyrics = data.lyrics || [];
+        currentLineIndex = -1;
+        songTitle = data.songTitle || '';
+        nextSongTitle = data.nextSongTitle || null;
+        syncTime = null;
+        renderLyrics();
+        updateNowSinging();
+        break;
+      case 'NEXT_SONG':
+        nextSongTitle = data.nextSongTitle || null;
+        updateNowSinging();
+        break;
+      case 'SYNC_UPDATE':
+        if (typeof data.currentTime === 'number') {
+          syncTime = data.currentTime;
+          syncPerf = performance.now();
+        }
+        if (data.currentLineIndex !== currentLineIndex) {
+          currentLineIndex = data.currentLineIndex;
+          updateActiveLine();
+        }
+        ensureWordLoop();
+        break;
+      case 'SETTINGS_PATCH':
+        applySettings(data);
+        break;
+      // deprecated: protocol v1 per-field settings messages. Older app builds
+      // still send these; drop this block in the next release.
+      case 'FONT_SIZE':
+      case 'LYRIC_COLORS':
+      case 'TITLE_FONT_SIZE':
+      case 'LYRICS_GAP':
+      case 'VISIBLE_RANGE':
+        applySettings(data);
+        break;
+      case 'OFFSET':
+        // Offset is applied on control page side; OBS just needs fresh sync
+        break;
+    }
+  }
+
+  // ========== Preview mode (embedded in the control page via <iframe>) ==========
+  // `?preview=1`: no PieSocket at all — the parent window feeds the same SyncMessages
+  // through postMessage. Only same-origin messages from the parent are accepted.
   const params = new URLSearchParams(window.location.search);
+  const previewMode = params.get('preview') === '1';
+
+  if (previewMode && window.parent !== window) {
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent || event.origin !== window.location.origin) return;
+      handleMessage(event.data);
+    });
+    window.parent.postMessage({ type: 'REQUEST_STATE', data: null }, window.location.origin);
+  }
+
+  // ========== PieSocket (OBS Sync) ==========
   const sessionId = params.get('s') || '';
   const channelName = sessionId ? `lyribox-${sessionId}` : 'lyribox';
 
-  const piesocket = new PieSocket.default({
+  const piesocket = previewMode ? null : new PieSocket.default({
     clusterId: '__VITE_PIESOCKET_CLUSTER_ID__',
     apiKey: '__VITE_PIESOCKET_API_KEY__',
     notifySelf: 0,
@@ -188,76 +407,7 @@
     piesocket.subscribe(channelName).then(ch => {
       syncChannel = ch;
 
-      ch.listen('sync', (msg) => {
-        const { type, data } = msg;
-        if (type === 'FULL_STATE' || type === 'LYRICS_LOADED') gotState = true;
-        switch (type) {
-          case 'FULL_STATE':
-            lyrics = data.lyrics || [];
-            currentLineIndex = data.currentLineIndex;
-            activeFontSize = data.activeFontSize || 32;
-            otherFontSize = data.otherFontSize || 28;
-            titleFontSize = data.titleFontSize || 18;
-            showTitle = data.showTitle ?? true;
-            lyricsGap = data.lyricsGap ?? 16;
-            visibleBefore = data.visibleBefore ?? 0;
-            visibleAfter = data.visibleAfter ?? 1;
-            activeColor = data.activeColor || '#ffffff';
-            otherColor = data.otherColor || '#9090a8';
-            passedColor = data.passedColor || '#5a5a70';
-            lyricsBgColor = data.lyricsBgColor || 'transparent';
-            songTitle = data.songTitle || '';
-            renderLyrics();
-            updateActiveLine();
-            updateNowSinging();
-            applyColors();
-            applyGap();
-            break;
-          case 'LYRICS_LOADED':
-            lyrics = data.lyrics || [];
-            currentLineIndex = -1;
-            songTitle = data.songTitle || '';
-            renderLyrics();
-            updateNowSinging();
-            break;
-          case 'SYNC_UPDATE':
-            if (data.currentLineIndex !== currentLineIndex) {
-              currentLineIndex = data.currentLineIndex;
-              updateActiveLine();
-            }
-            break;
-          case 'FONT_SIZE':
-            activeFontSize = data.activeFontSize;
-            otherFontSize = data.otherFontSize;
-            updateActiveLine();
-            break;
-          case 'LYRIC_COLORS':
-            activeColor = data.activeColor || '#ffffff';
-            otherColor = data.otherColor || '#9090a8';
-            passedColor = data.passedColor || '#5a5a70';
-            lyricsBgColor = data.lyricsBgColor || 'transparent';
-            updateActiveLine();
-            applyColors();
-            break;
-          case 'TITLE_FONT_SIZE':
-            titleFontSize = data.titleFontSize;
-            showTitle = data.showTitle ?? true;
-            updateNowSinging();
-            break;
-          case 'LYRICS_GAP':
-            lyricsGap = data.lyricsGap ?? 16;
-            applyGap();
-            break;
-          case 'VISIBLE_RANGE':
-            visibleBefore = data.visibleBefore ?? 0;
-            visibleAfter = data.visibleAfter ?? 1;
-            updateActiveLine();
-            break;
-          case 'OFFSET':
-            // Offset is applied on control page side; OBS just needs fresh sync
-            break;
-        }
-      });
+      ch.listen('sync', handleMessage);
 
       // Ask for the full state once on connect. The control page also pushes it
       // whenever it (re)connects, so no polling is needed while idle.
@@ -288,7 +438,7 @@
     });
   }
 
-  connectChannel();
+  if (!previewMode) connectChannel();
 
   function renderLyrics() {
     const container = document.getElementById('lyricsContainer');
@@ -299,38 +449,135 @@
       return;
     }
 
+    const e = effective();
     lyrics.forEach((item, index) => {
       const div = document.createElement('div');
       div.className = 'lyric-line upcoming';
       div.id = `lyric-${index}`;
-      div.style.fontSize = otherFontSize + 'px';
+      div.style.fontSize = e.otherFontSize + 'px';
       div.style.color = otherColor;
 
       if (item.text === '' || item.text === '//') {
         div.classList.add('interlude');
         div.appendChild(document.createTextNode('\u9593\u594F'));
       } else {
-        div.appendChild(document.createTextNode(item.text));
+        const textEl = document.createElement('span');
+        textEl.className = 'lyric-text';
+        textEl.textContent = item.text;
+        textEl.dataset.mode = 'plain';
+        div.appendChild(textEl);
+        if (item.subText) {
+          const sub = document.createElement('div');
+          sub.className = 'lyric-sub';
+          sub.textContent = item.subText;
+          div.appendChild(sub);
+        }
       }
 
       container.appendChild(div);
     });
   }
 
+  function hasWords(item) {
+    return !!(item && item.words && item.words.length > 0);
+  }
+
+  // Active line with Enhanced LRC words → per-word spans; otherwise plain text.
+  function setLineContent(lineEl, item, active) {
+    const textEl = lineEl.querySelector('.lyric-text');
+    if (!textEl) return;
+    if (active && hasWords(item)) {
+      if (textEl.dataset.mode !== 'words') {
+        textEl.textContent = '';
+        item.words.forEach((w) => {
+          const word = document.createElement('span');
+          word.className = 'lyric-word';
+          const base = document.createElement('span');
+          base.className = 'lyric-word-base';
+          base.textContent = w.text;
+          const fill = document.createElement('span');
+          fill.className = 'lyric-word-fill';
+          fill.setAttribute('aria-hidden', 'true');
+          fill.textContent = w.text;
+          word.appendChild(base);
+          word.appendChild(fill);
+          textEl.appendChild(word);
+        });
+        textEl.dataset.mode = 'words';
+      }
+      textEl.querySelectorAll('.lyric-word-base').forEach((el) => { el.style.color = otherColor; });
+      textEl.querySelectorAll('.lyric-word-fill').forEach((el) => { el.style.color = activeColor; });
+    } else if (textEl.dataset.mode !== 'plain') {
+      textEl.textContent = item.text;
+      textEl.dataset.mode = 'plain';
+    }
+  }
+
+  function findActiveWordIndex(words, t) {
+    let idx = -1;
+    for (let i = 0; i < words.length; i++) {
+      if (words[i].time <= t) idx = i; else break;
+    }
+    return idx;
+  }
+
+  function wordProgress(words, index, t, endTime) {
+    const word = words[index];
+    if (!word) return 0;
+    const end = index + 1 < words.length ? words[index + 1].time : endTime;
+    if (end === undefined || end <= word.time) return 1;
+    const p = (t - word.time) / (end - word.time);
+    return p < 0 ? 0 : p > 1 ? 1 : p;
+  }
+
+  function ensureWordLoop() {
+    if (wordRaf !== null) return;
+    const item = lyrics[currentLineIndex];
+    if (!hasWords(item) || syncTime === null) return;
+    wordRaf = requestAnimationFrame(wordFrame);
+  }
+
+  function wordFrame() {
+    wordRaf = null;
+    const item = lyrics[currentLineIndex];
+    if (!hasWords(item) || syncTime === null) return;
+    const lineEl = document.getElementById(`lyric-${currentLineIndex}`);
+    if (!lineEl) return;
+
+    // Extrapolate between 80ms ticks; freeze if updates stop (paused / stalled)
+    const extra = Math.min((performance.now() - syncPerf) / 1000, MAX_EXTRAPOLATION_S);
+    const t = syncTime + extra;
+    const endTime = item.endTime !== undefined ? item.endTime : (lyrics[currentLineIndex + 1] || {}).time;
+    const idx = findActiveWordIndex(item.words, t);
+    const progress = idx >= 0 ? wordProgress(item.words, idx, t, endTime) : 0;
+
+    const fills = lineEl.querySelectorAll('.lyric-word-fill');
+    fills.forEach((el, i) => {
+      const clip = i < idx ? 0 : i > idx ? 100 : (1 - progress) * 100;
+      const next = `inset(0 ${clip}% 0 0)`;
+      if (el.style.clipPath !== next) el.style.clipPath = next;
+    });
+
+    wordRaf = requestAnimationFrame(wordFrame);
+  }
+
   function updateActiveLine() {
     const lines = document.querySelectorAll('.lyric-line');
-    const lo = currentLineIndex - visibleBefore;
-    const hi = currentLineIndex + visibleAfter;
+    const e = effective();
+    const lo = currentLineIndex - e.visibleBefore;
+    const hi = currentLineIndex + e.visibleAfter;
     lines.forEach((line, i) => {
       line.classList.remove('active', 'next', 'visible');
+      const isActive = i === currentLineIndex;
+      setLineContent(line, lyrics[i], isActive);
       if (i < lo || i > hi || currentLineIndex < 0) return;
-      if (i === currentLineIndex) {
+      if (isActive) {
         line.classList.add('active', 'visible');
-        line.style.fontSize = activeFontSize + 'px';
+        line.style.fontSize = e.activeFontSize + 'px';
         line.style.color = activeColor;
       } else {
         line.classList.add('next', 'visible');
-        line.style.fontSize = otherFontSize + 'px';
+        line.style.fontSize = e.otherFontSize + 'px';
         line.style.color = i < currentLineIndex ? passedColor : otherColor;
       }
     });

@@ -77,7 +77,13 @@ export function AudioSourceTabs({
       </label>
       <Tabs
         value={audioSource}
-        onValueChange={(v) => onAudioSourceChange(v as AudioSource)}
+        onValueChange={(v) => {
+          onAudioSourceChange(v as AudioSource)
+          // Radix fires this inside the pointer-down gesture, so the OS picker may
+          // open straight away. Only when no file is chosen yet — re-opening it
+          // while editing a song that already has one would get in the way.
+          if (v === 'local' && !audioFileName) fileInputRef.current?.click()
+        }}
       >
         <TabsList className="w-full">
           <TabsTrigger value="youtube" className="flex-1">
@@ -131,13 +137,6 @@ export function AudioSourceTabs({
               選擇
             </button>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*"
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
           <label
             className="flex items-start text-lb-text-secondary cursor-pointer"
             style={{ gap: '8px', marginTop: '10px', fontSize: '12px', lineHeight: 1.5 }}
@@ -159,6 +158,14 @@ export function AudioSourceTabs({
           </label>
         </TabsContent>
       </Tabs>
+      {/* Always mounted (outside the tab panels) so the 本地音檔 tab can open it directly */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*"
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+      />
     </div>
   )
 }

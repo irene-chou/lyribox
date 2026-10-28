@@ -3,12 +3,18 @@ import { useShallow } from 'zustand/react/shallow'
 import { useSongStore } from '@/stores/useSongStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { navigateSong } from '@/lib/song-selection'
+import { playlistPosition } from '@/lib/playlist'
 import { shortcutHint } from '@/lib/shortcuts'
 import { ICON_BTN_CLASS, ICON_BTN_STYLE } from '@/lib/constants'
 import { AudioPlayer } from '../playback/AudioPlayer'
 import { OffsetControls } from '../playback/OffsetControls'
 import { PitchControls } from '../playback/PitchControls'
 import { DisplaySettings } from '../settings/DisplaySettings'
+import { OBSPreview } from '../settings/OBSPreview'
+import { CloudBackupSettings } from '../settings/CloudBackupSettings'
+
+/** 雲端備份暫時關閉（功能保留，之後再開）。 */
+const CLOUD_BACKUP_ENABLED = false
 import { SaveStatusIndicator } from './SaveStatusIndicator'
 import type { Song } from '@/types'
 import type { usePlaybackEngine } from '@/hooks/usePlaybackEngine'
@@ -25,7 +31,7 @@ const navBtnClass =
 const navBtnStyle: React.CSSProperties = { width: '28px', height: '28px', borderRadius: '6px', padding: 0 }
 
 export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlPanelProps) {
-  const { currentSongId, currentSongTitle, currentSongCreatedAt, lrcText, offset, pitch, audioSource, youtubeId, audioFileName, folderId } = useSongStore(
+  const { currentSongId, currentSongTitle, currentSongCreatedAt, lrcText, offset, pitch, vocalRemoval, audioSource, youtubeId, audioFileName, folderId } = useSongStore(
     useShallow((s) => ({
       currentSongId: s.currentSongId,
       currentSongTitle: s.currentSongTitle,
@@ -33,6 +39,7 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
       lrcText: s.lrcText,
       offset: s.offset,
       pitch: s.pitch,
+      vocalRemoval: s.vocalRemoval,
       audioSource: s.audioSource,
       youtubeId: s.youtubeId,
       audioFileName: s.audioFileName,
@@ -40,6 +47,11 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
     }))
   )
   const sidebarWidth = useUISettingsStore((s) => s.sidebarWidth)
+  const { playlist, playlistEnabled } = useUISettingsStore(
+    useShallow((s) => ({ playlist: s.playlist, playlistEnabled: s.playlistEnabled })),
+  )
+  const position = playlistEnabled ? playlistPosition(playlist, currentSongId) : null
+  const navOrderHint = playlistEnabled && playlist.length > 0 ? '（歌單順序）' : ''
 
   function handleEdit() {
     if (!currentSongId) return
@@ -49,6 +61,7 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
       lrcText,
       offset,
       pitch,
+      vocalRemoval,
       audioSource,
       youtubeId,
       audioFileName,
@@ -110,7 +123,7 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
                   className={navBtnClass}
                   style={navBtnStyle}
                   onClick={() => void navigateSong(-1)}
-                  title={`上一首 ${shortcutHint('prev-song')}`}
+                  title={`上一首${navOrderHint} ${shortcutHint('prev-song')}`}
                   aria-label="上一首"
                 >
                   <ChevronLeft size={14} />
@@ -122,11 +135,20 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
                 >
                   {currentSongTitle}
                 </span>
+                {position !== null && (
+                  <span
+                    className="shrink-0 text-lb-text-secondary"
+                    style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', lineHeight: '28px' }}
+                    title="歌單位置"
+                  >
+                    {position}/{playlist.length}
+                  </span>
+                )}
                 <button
                   className={navBtnClass}
                   style={navBtnStyle}
                   onClick={() => void navigateSong(1)}
-                  title={`下一首 ${shortcutHint('next-song')}`}
+                  title={`下一首${navOrderHint} ${shortcutHint('next-song')}`}
                   aria-label="下一首"
                 >
                   <ChevronRight size={14} />
@@ -148,8 +170,14 @@ export function ControlPanel({ onEditSong, engine, isMobile, onClose }: ControlP
         )}
       </section>
 
+      {/* OBS 預覽（可收合） */}
+      <OBSPreview />
+
       {/* 顯示設定（可收合） */}
       <DisplaySettings />
+
+      {/* 雲端備份（可收合；暫時關閉） */}
+      {CLOUD_BACKUP_ENABLED && <CloudBackupSettings />}
 
       {!isMobile && (
         <p className="text-lb-text-secondary" style={{ marginTop: 'auto', fontSize: '11px', lineHeight: 1.6 }}>

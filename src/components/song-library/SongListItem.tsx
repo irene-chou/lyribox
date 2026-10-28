@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Trash2, FolderInput, FolderMinus, GripVertical } from 'lucide-react'
+import { Trash2, FolderInput, FolderMinus, GripVertical, ListPlus, ListX } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,9 @@ interface SongListItemProps {
   onSelect: (song: Song) => void
   onDelete: (song: Song) => void
   onMove: (song: Song, folderId: number | null) => void
+  /** Whether the song is in the playlist; drives the 加入／移出歌單 button. */
+  inPlaylist?: boolean
+  onTogglePlaylist?: (song: Song) => void
 }
 
 export const SongListItem = memo(function SongListItem({
@@ -25,6 +28,8 @@ export const SongListItem = memo(function SongListItem({
   onSelect,
   onDelete,
   onMove,
+  inPlaylist = false,
+  onTogglePlaylist,
 }: SongListItemProps) {
   const hasFolders = folders.length > 0
   const [isDragging, setIsDragging] = useState(false)
@@ -73,12 +78,54 @@ export const SongListItem = memo(function SongListItem({
 
       <span className="flex-1 min-w-0 truncate">{song.name}</span>
 
+      {/* Resting-state playlist marker (hidden on hover, where the toggle button takes over) */}
+      {inPlaylist && !isActive && (
+        <span
+          className="flex group-hover:hidden items-center shrink-0"
+          style={{ color: 'var(--lb-accent)' }}
+          title="已在歌單中"
+        >
+          <ListPlus size={13} />
+        </span>
+      )}
+
       {/* Action buttons — always in layout (visibility via opacity) so Radix
           DropdownMenu can measure the trigger position correctly */}
       <span
         className="opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto flex items-center shrink-0"
         style={{ gap: '4px' }}
       >
+        {/* Add to / remove from playlist */}
+        {onTogglePlaylist && (
+          <button
+            className="flex items-center cursor-pointer"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '2px',
+              borderRadius: '4px',
+              color: isActive ? 'rgba(255,255,255,0.7)' : inPlaylist ? 'var(--lb-accent)' : 'var(--lb-text-secondary)',
+              transition: 'all 0.15s',
+            }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onTogglePlaylist(song)
+            }}
+            title={inPlaylist ? '移出歌單' : '加入歌單'}
+            aria-label={inPlaylist ? '移出歌單' : '加入歌單'}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+              e.currentTarget.style.color = isActive ? '#fff' : 'var(--lb-text-primary)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'none'
+              e.currentTarget.style.color = isActive ? 'rgba(255,255,255,0.7)' : inPlaylist ? 'var(--lb-accent)' : 'var(--lb-text-secondary)'
+            }}
+          >
+            {inPlaylist ? <ListX size={14} /> : <ListPlus size={14} />}
+          </button>
+        )}
+
         {/* Move to folder */}
         {hasFolders && (
           <DropdownMenu>

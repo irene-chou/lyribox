@@ -1,3 +1,6 @@
+import type { ObsUrlParams } from '@/types'
+import { obsParamsToSearchParams } from '@/lib/obs-params'
+
 const PIESOCKET_API_KEY = import.meta.env.VITE_PIESOCKET_API_KEY ?? ''
 const PIESOCKET_CLUSTER_ID = import.meta.env.VITE_PIESOCKET_CLUSTER_ID ?? 'demo'
 
@@ -30,9 +33,19 @@ export function observeReconnects(channel: PieSocketChannel, onReopen: () => voi
   }
 }
 
-export function getOBSUrl(): string {
+/**
+ * Build the OBS browser-source URL. `base` is the app directory URL ending in `/`;
+ * optional `params` become appearance overrides understood by obs.html (see obs-params.ts).
+ */
+export function buildObsUrl(base: string, sessionId: string, params?: ObsUrlParams): string {
+  const q = obsParamsToSearchParams(params ?? {})
+  const extra = q.toString()
+  return `${base}obs.html?s=${encodeURIComponent(sessionId)}${extra ? `&${extra}` : ''}`
+}
+
+export function getOBSUrl(params?: ObsUrlParams): string {
   const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/')
-  return `${base}obs.html?s=${getSessionId()}`
+  return buildObsUrl(base, getSessionId(), params)
 }
 
 export { PIESOCKET_API_KEY, PIESOCKET_CLUSTER_ID }

@@ -1,11 +1,14 @@
 import { memo, useMemo, forwardRef } from 'react'
 import type { LyricLine as LyricLineType } from '@/types'
+import { WordLine } from './WordLine'
 
 export type LyricStatus = 'passed' | 'active' | 'upcoming'
 
 interface LyricLineProps {
   line: LyricLineType
   status: LyricStatus
+  /** Fallback end for word timing when the line has no trailing end tag (next line's time). */
+  lineEnd?: number
   activeFontSize: number
   otherFontSize: number
   activeColor: string
@@ -19,6 +22,7 @@ export const LyricLine = memo(
     {
       line,
       status,
+      lineEnd,
       activeFontSize,
       otherFontSize,
       activeColor,
@@ -84,7 +88,33 @@ export const LyricLine = memo(
         style={style}
         title={onClick ? '點擊跳到此句' : undefined}
       >
-        {isInterlude ? '♪' : line.text}
+        {isInterlude ? (
+          '♪'
+        ) : isActive && line.words && line.words.length > 0 ? (
+          <WordLine
+            words={line.words}
+            endTime={line.endTime ?? lineEnd}
+            activeColor={activeColor}
+            otherColor={otherColor}
+          />
+        ) : (
+          line.text
+        )}
+        {!isInterlude && line.subText && (
+          <div
+            style={{
+              fontSize: `${Math.round(fontSize * 0.6)}px`,
+              fontWeight: 400,
+              lineHeight: 1.4,
+              opacity: 0.75,
+              marginTop: '2px',
+              whiteSpace: 'pre-line',
+              transition: 'font-size 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)',
+            }}
+          >
+            {line.subText}
+          </div>
+        )}
       </div>
     )
   }),

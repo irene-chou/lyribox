@@ -29,6 +29,7 @@ export function saveCurrentSong(): Promise<void> | undefined {
     lrcText: song.lrcText,
     offset: song.offset,
     pitch: song.pitch,
+    vocalRemoval: song.vocalRemoval,
     audioSource: song.audioSource,
     youtubeId: song.youtubeId,
     audioFileName: song.audioFileName,

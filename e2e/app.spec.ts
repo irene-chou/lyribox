@@ -313,3 +313,53 @@ test.describe('Local audio playback', () => {
     expect(result.rms).toBeGreaterThan(0.01)
   })
 })
+
+test.describe('LRC timing editor (打軸)', () => {
+  test('converts plain lines, accepts a typed timestamp and writes LRC back', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('button[title="新增歌曲"]').click()
+    await page.locator('textarea').first().fill('第一句\n第二句')
+
+    await page.getByRole('button', { name: '打軸' }).click()
+    // New song is not the loaded one, so stamping is disabled and explained
+    await expect(page.getByText('打軸需要播放這首歌的音源')).toBeVisible()
+    await expect(page.getByLabel('第 2 行歌詞')).toHaveValue('第二句')
+
+    // Manual timestamp entry still works
+    const t1 = page.getByLabel('第 1 行時間')
+    await t1.fill('00:12.5')
+    await t1.press('Enter')
+    await expect(t1).toHaveValue('00:12.50')
+
+    // +0.1 nudges the stamped line
+    await page.getByTitle('此行 +0.1s').first().click()
+    await expect(t1).toHaveValue('00:12.60')
+
+    // Back to the textarea: LRC is serialised, unstamped line kept as text
+    await page.getByRole('button', { name: '打軸' }).click()
+    await expect(page.locator('textarea').first()).toHaveValue('[00:12.60]第一句\n第二句')
+  })
+
+  test('stamps the current playback time with Enter when editing the loaded song', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('button[title="新增歌曲"]').click()
+    await page.getByPlaceholder('輸入歌曲名稱').fill('Timing Song')
+    await page.locator('textarea').first().fill('[00:01.00]舊的\n新的一句')
+    await page.getByRole('button', { name: '儲存並載入' }).click()
+    await expect(page.getByRole('heading', { name: '新增歌曲' })).not.toBeVisible()
+
+    // Manual timer: play, let it run, then open the editor for the loaded song
+    await page.getByRole('button', { name: '播放' }).click()
+    await page.waitForTimeout(700)
+    await page.locator('button[title="編輯歌曲"]').click()
+    await expect(page.getByRole('heading', { name: '編輯歌曲' })).toBeVisible()
+    await page.getByRole('button', { name: '打軸' }).click()
+
+    const t2 = page.getByLabel('第 2 行時間')
+    await expect(t2).toHaveValue('')
+    await page.getByLabel('第 2 行歌詞').press('Enter')
+    const value = await t2.inputValue()
+    expect(value).toMatch(/^00:0[0-9]\.\d\d$/)
+    expect(value).not.toBe('00:00.00')
+  })
+})

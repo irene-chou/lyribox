@@ -40,6 +40,7 @@ export function debouncedSaveSong(delay = 600) {
       lrcText: state.lrcText,
       offset: state.offset,
       pitch: state.pitch,
+      vocalRemoval: state.vocalRemoval,
       audioSource: state.audioSource,
       youtubeId: state.youtubeId,
       audioFileName: state.audioFileName,
@@ -61,13 +62,18 @@ export async function deleteSongFromDB(id: number): Promise<void> {
   })
 }
 
+/** Current library (songs + folders) in the export JSON shape. */
+export async function getLibrarySnapshot(): Promise<{ songs: Song[]; folders: Folder[] }> {
+  const songs = await db.songs.toArray()
+  const folders = await db.folders.toArray()
+  return { songs, folders }
+}
+
 /**
  * Export all songs and folders as a JSON file download.
  */
 export async function exportSongs(): Promise<void> {
-  const songs = await db.songs.toArray()
-  const folders = await db.folders.toArray()
-  const json = JSON.stringify({ songs, folders }, null, 2)
+  const json = JSON.stringify(await getLibrarySnapshot(), null, 2)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -77,7 +83,7 @@ export async function exportSongs(): Promise<void> {
   URL.revokeObjectURL(url)
 }
 
-function isValidSong(obj: unknown): obj is Song {
+export function isValidSong(obj: unknown): obj is Song {
   if (typeof obj !== 'object' || obj === null) return false
   const s = obj as Record<string, unknown>
   return (
@@ -86,6 +92,7 @@ function isValidSong(obj: unknown): obj is Song {
     typeof s.lrcText === 'string' &&
     typeof s.offset === 'number' && Number.isFinite(s.offset) &&
     (s.pitch === undefined || (typeof s.pitch === 'number' && Number.isFinite(s.pitch))) &&
+    (s.vocalRemoval === undefined || typeof s.vocalRemoval === 'boolean') &&
     (s.audioSource === 'youtube' || s.audioSource === 'local') &&
     (s.youtubeId === null || typeof s.youtubeId === 'string') &&
     (s.audioFileName === null || typeof s.audioFileName === 'string') &&
@@ -95,7 +102,7 @@ function isValidSong(obj: unknown): obj is Song {
   )
 }
 
-function isValidFolder(obj: unknown): obj is Folder {
+export function isValidFolder(obj: unknown): obj is Folder {
   if (typeof obj !== 'object' || obj === null) return false
   const f = obj as Record<string, unknown>
   return (
@@ -118,7 +125,14 @@ export async function importSongs(file: File): Promise<number> {
   } catch {
     throw new Error('無效的 JSON 格式')
   }
+  return importLibrary(parsed)
+}
 
+/**
+ * Validate an already-parsed library payload and merge it into IndexedDB.
+ * Returns the number of songs written. Shared by file import and cloud restore.
+ */
+export async function importLibrary(parsed: unknown): Promise<number> {
   let songList: unknown[]
   let folderList: unknown[] = []
 
@@ -147,8 +161,8 @@ export async function importSongs(file: File): Promise<number> {
   let count = 0
   for (const item of songList) {
     if (isValidSong(item)) {
-      const { id, name, lrcText, offset, pitch = 0, audioSource, youtubeId, audioFileName, folderId = null, createdAt, updatedAt } = item
-      await db.songs.put({ id, name, lrcText, offset, pitch, audioSource, youtubeId, audioFileName, folderId, createdAt, updatedAt })
+      const { id, name, lrcText, offset, pitch = 0, vocalRemoval = false, audioSource, youtubeId, audioFileName, folderId = null, createdAt, updatedAt } = item
+      await db.songs.put({ id, name, lrcText, offset, pitch, vocalRemoval, audioSource, youtubeId, audioFileName, folderId, createdAt, updatedAt })
       count++
     }
   }

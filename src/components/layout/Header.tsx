@@ -1,12 +1,26 @@
 import { useState, useCallback } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, Heart } from 'lucide-react'
+import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, ChevronDown, Settings2, Heart } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ObsPresetsDialog } from '@/components/settings/ObsPresetsDialog'
+
+/** 多組 OBS 設定連結暫時關閉（功能保留，待決定要提供哪些預設）。 */
+const OBS_PRESETS_ENABLED = false
 import { getOBSUrl } from '@/lib/piesocket'
+import { describeObsParams } from '@/lib/obs-params'
 import { promptDialog } from '@/stores/useDialogStore'
 import { toast } from '@/stores/useToastStore'
 import { shortcutHint } from '@/lib/shortcuts'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { track } from '@/lib/analytics'
+import type { ObsPreset } from '@/types'
 
 const KOFI_URL = 'https://ko-fi.com/zephyrinn'
 
@@ -21,20 +35,23 @@ interface HeaderProps {
 export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onToggleMobilePanel }: HeaderProps) {
   const { theme, setTheme } = useTheme()
   const [copied, setCopied] = useState(false)
+  const [presetsOpen, setPresetsOpen] = useState(false)
+  const obsPresets = useUISettingsStore((s) => s.obsPresets)
 
   function toggleTheme() {
     setTheme(theme === 'dark' ? 'light' : 'dark')
   }
 
-  const copyOBSUrl = useCallback(async () => {
-    const url = getOBSUrl()
+  /** Copy the OBS URL; with a preset, its params are appended so that source looks different. */
+  const copyOBSUrl = useCallback(async (preset?: ObsPreset) => {
+    const url = getOBSUrl(preset?.params)
     // Opting in here is what makes useOBSSync open the PieSocket connection
     useUISettingsStore.getState().setObsSyncEnabled(true)
     track('obs_url_copy')
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
-      toast.success('已複製 OBS 瀏覽器來源 URL')
+      toast.success(preset ? `已複製「${preset.name}」的 OBS URL` : '已複製 OBS 瀏覽器來源 URL')
       setTimeout(() => setCopied(false), 1500)
     } catch {
       await promptDialog({
@@ -94,15 +111,56 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
           <Heart size={isMobile ? 18 : 20} />
         </a>
 
-        <button
-          onClick={copyOBSUrl}
-          className={`${iconBtn} ${copied ? 'text-lb-success' : ''}`}
-          style={iconBtnStyle}
-          title="複製 OBS 瀏覽器來源 URL"
-          aria-label="複製 OBS 瀏覽器來源 URL"
-        >
-          {copied ? <Check size={isMobile ? 18 : 20} /> : <Link size={isMobile ? 18 : 20} />}
-        </button>
+        {/* OBS URL: split button — main part copies the default URL, chevron lists presets */}
+        <div className="flex items-center">
+          <button
+            onClick={() => copyOBSUrl()}
+            className={`${iconBtn} ${copied ? 'text-lb-success' : ''}`}
+            style={OBS_PRESETS_ENABLED ? { ...iconBtnStyle, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : iconBtnStyle}
+            title="複製 OBS 瀏覽器來源 URL"
+            aria-label="複製 OBS 瀏覽器來源 URL"
+          >
+            {copied ? <Check size={isMobile ? 18 : 20} /> : <Link size={isMobile ? 18 : 20} />}
+          </button>
+          {OBS_PRESETS_ENABLED && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={iconBtn}
+                style={{ ...iconBtnStyle, width: '18px', borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+                title="OBS 預設組"
+                aria-label="選擇 OBS 預設組"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-lb-bg-card border border-lb-border" style={{ minWidth: '220px' }}>
+              <DropdownMenuLabel className="text-lb-text-dim" style={{ fontSize: '11px' }}>
+                複製 OBS URL（預設組）
+              </DropdownMenuLabel>
+              {obsPresets.map((preset) => (
+                <DropdownMenuItem
+                  key={preset.id}
+                  onClick={() => copyOBSUrl(preset)}
+                  className="cursor-pointer text-sm text-lb-text-primary flex flex-col items-start"
+                  style={{ gap: '1px' }}
+                >
+                  <span>{preset.name}</span>
+                  <span className="text-lb-text-dim" style={{ fontSize: '11px' }}>
+                    {describeObsParams(preset.params)}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator className="bg-lb-border" />
+              <DropdownMenuItem onClick={() => setPresetsOpen(true)} className="cursor-pointer text-sm text-lb-text-primary">
+                <Settings2 size={14} className="mr-2" />
+                管理預設…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          )}
+        </div>
+        {OBS_PRESETS_ENABLED && <ObsPresetsDialog open={presetsOpen} onOpenChange={setPresetsOpen} onCopy={copyOBSUrl} />}
 
         {!isMobile && (
           <button

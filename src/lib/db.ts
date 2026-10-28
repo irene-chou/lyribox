@@ -39,4 +39,16 @@ db.version(4).stores({
   audioFiles: 'songId',
 })
 
+db.version(5).stores({
+  songs: 'id',
+  folders: 'id',
+  audioFiles: 'songId',
+}).upgrade(tx => {
+  return tx.table('songs').toCollection().modify(song => {
+    if (song.vocalRemoval === undefined) {
+      song.vocalRemoval = false
+    }
+  })
+})
+
 export { db }

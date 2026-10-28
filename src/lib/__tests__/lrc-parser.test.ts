@@ -87,4 +87,129 @@ describe('parseLRC', () => {
     const { lyrics } = parseLRC(lrc)
     expect(lyrics[0].time).toBe(7200)
   })
+
+  describe('same-timestamp merging (translation / romanization)', () => {
+    it('merges a following line with the same timestamp into subText', () => {
+      const lrc = '[00:12.30]君の名前を呼ぶ\n[00:12.30]呼喚你的名字\n[00:15.00]Next'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(2)
+      expect(lyrics[0]).toEqual({ time: 12.3, text: '君の名前を呼ぶ', subText: '呼喚你的名字' })
+      expect(lyrics[1]).toEqual({ time: 15, text: 'Next' })
+    })
+
+    it('joins three or more same-timestamp lines with newlines', () => {
+      const lrc = '[00:01.00]原文\n[00:01.00]翻譲\n[00:01.00]romaji'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0].subText).toBe('翻譲\nromaji')
+    })
+
+    it('treats differently formatted but equal timestamps as the same', () => {
+      const lrc = '[00:01.50]A\n[00:01.500]B'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0].subText).toBe('B')
+    })
+
+    it('promotes the first non-empty text to the primary line', () => {
+      const lrc = '[00:01.00]\n[00:01.00]Hello'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0]).toEqual({ time: 1, text: 'Hello' })
+    })
+
+    it('keeps a single empty line when all same-timestamp lines are empty', () => {
+      const lrc = '[00:01.00]\n[00:01.00]'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toEqual([{ time: 1, text: '' }])
+    })
+
+    it('does not produce subText when the duplicate text is identical', () => {
+      const lrc = '[00:01.00][00:01.00]Same'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toEqual([{ time: 1, text: 'Same' }])
+    })
+
+    it('keeps the original order when merging after sort', () => {
+      const lrc = '[00:20.00]Late\n[00:10.00]Orig\n[00:10.00]Trans'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics.map((l) => l.text)).toEqual(['Orig', 'Late'])
+      expect(lyrics[0].subText).toBe('Trans')
+    })
+  })
+
+  describe('Enhanced LRC word timing', () => {
+    it('parses inline <mm:ss.xx> tags into words with plain text stripped', () => {
+      const lrc = '[00:10.00]<00:10.00>Hello <00:10.50>brave <00:11.00>world<00:11.80>'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0].text).toBe('Hello brave world')
+      expect(lyrics[0].words).toEqual([
+        { time: 10, text: 'Hello ' },
+        { time: 10.5, text: 'brave ' },
+        { time: 11, text: 'world' },
+      ])
+      expect(lyrics[0].endTime).toBe(11.8)
+    })
+
+    it('assigns text before the first inline tag to the line start time', () => {
+      const lrc = '[00:05.00]Intro <00:05.40>word'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics[0].words).toEqual([
+        { time: 5, text: 'Intro ' },
+        { time: 5.4, text: 'word' },
+      ])
+      expect(lyrics[0].endTime).toBeUndefined()
+    })
+
+    it('leaves plain lines in a mixed file untouched', () => {
+      const lrc = '[00:01.00]Plain line\n[00:02.00]<00:02.00>A <00:02.50>B'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics[0]).toEqual({ time: 1, text: 'Plain line' })
+      expect(lyrics[1].words).toHaveLength(2)
+    })
+
+    it('handles 2-digit and 3-digit fractions in word tags', () => {
+      const lrc = '[00:01.00]<00:01.25>A <00:01.750>B'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics[0].words?.map((w) => w.time)).toEqual([1.25, 1.75])
+    })
+
+    it('keeps malformed inline tags as literal text', () => {
+      const lrc = '[00:01.00]<00:1>Not a tag <00:01.50>Real'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics[0].text).toBe('<00:1>Not a tag Real')
+      expect(lyrics[0].words).toEqual([
+        { time: 1, text: '<00:1>Not a tag ' },
+        { time: 1.5, text: 'Real' },
+      ])
+    })
+
+    it('folds whitespace-only segments into the previous word', () => {
+      const lrc = '[00:01.00]<00:01.00>A<00:01.20> <00:01.40>B'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics[0].words).toEqual([
+        { time: 1, text: 'A ' },
+        { time: 1.4, text: 'B' },
+      ])
+      expect(lyrics[0].text).toBe('A B')
+    })
+
+    it('does not attach words when a line has repeated line tags', () => {
+      const lrc = '[00:01.00][00:20.00]<00:01.00>A <00:01.50>B'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(2)
+      expect(lyrics[0].words).toBeUndefined()
+      expect(lyrics[0].text).toBe('<00:01.00>A <00:01.50>B')
+    })
+
+    it('keeps word timing of the primary line when merging same-timestamp lines', () => {
+      const lrc = '[00:01.00]<00:01.00>原 <00:01.50>文\n[00:01.00]翻譯'
+      const { lyrics } = parseLRC(lrc)
+      expect(lyrics).toHaveLength(1)
+      expect(lyrics[0].text).toBe('原 文')
+      expect(lyrics[0].subText).toBe('翻譯')
+      expect(lyrics[0].words).toHaveLength(2)
+    })
+  })
 })

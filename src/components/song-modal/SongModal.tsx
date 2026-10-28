@@ -17,14 +17,17 @@ import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { extractVideoId } from '@/lib/format'
 import { saveAudioFile, getAudioFile, deleteAudioFile } from '@/lib/audio-file-store'
 import type { Song, AudioSource } from '@/types'
+import type { PlaybackEngine } from './LrcTimingTab'
 
 interface SongModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   editSong?: Song | null
+  /** Playback engine, used by the 打軸 (timing) mode of the LRC editor. */
+  engine?: PlaybackEngine
 }
 
-export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
+export function SongModal({ open, onOpenChange, editSong, engine }: SongModalProps) {
   const [name, setName] = useState('')
   const [audioSource, setAudioSource] = useState<AudioSource>('youtube')
   const [youtubeUrl, setYoutubeUrl] = useState('')
@@ -38,6 +41,9 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
 
   const isEditMode = !!editSong
   const loadSong = useSongStore((s) => s.loadSong)
+  const currentSongId = useSongStore((s) => s.currentSongId)
+  // Timing stamps read the player's clock, so the edited song must be the loaded one
+  const canStamp = !!editSong && editSong.id === currentSongId
 
   useEffect(() => {
     if (!open) return
@@ -90,6 +96,7 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
       lrcText: lrcText.trim(),
       offset: isEditMode ? editSong!.offset : 0,
       pitch: isEditMode ? editSong!.pitch : 0,
+      vocalRemoval: isEditMode ? (editSong!.vocalRemoval ?? false) : false,
       audioSource,
       youtubeId: isYoutube ? extractVideoId(youtubeUrl) : null,
       audioFileName: isYoutube ? null : audioFileName || null,
@@ -225,6 +232,8 @@ export function SongModal({ open, onOpenChange, editSong }: SongModalProps) {
               if (text.trim()) setLrcError(null)
             }}
             onSearchSelect={handleSearchSelect}
+            engine={engine}
+            canStamp={canStamp}
           />
           {lrcError && (
             <p role="alert" className="text-lb-danger" style={{ fontSize: '12px', marginTop: '-8px', lineHeight: 1.5 }}>

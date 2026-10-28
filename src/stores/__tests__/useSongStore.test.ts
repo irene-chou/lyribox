@@ -10,6 +10,7 @@ const song: Song = {
   lrcText: '[00:02.00]second\n[00:01.00]first',
   offset: 0.5,
   pitch: 2,
+  vocalRemoval: false,
   audioSource: 'youtube',
   youtubeId: 'abc',
   audioFileName: null,
@@ -45,6 +46,22 @@ describe('useSongStore', () => {
     expect(useSongStore.getState().pitch).toBe(0)
   })
 
+  it('defaults vocalRemoval to false for songs saved before it existed', () => {
+    const legacy = { ...song, vocalRemoval: undefined } as unknown as Song
+    useSongStore.getState().loadSong(legacy)
+    expect(useSongStore.getState().vocalRemoval).toBe(false)
+    expect(useSongStore.getState().hasUnsavedChanges()).toBe(false)
+  })
+
+  it('tracks vocalRemoval as an unsaved change', () => {
+    useSongStore.getState().loadSong(song)
+    useSongStore.getState().setVocalRemoval(true)
+    expect(useSongStore.getState().vocalRemoval).toBe(true)
+    expect(useSongStore.getState().hasUnsavedChanges()).toBe(true)
+    useSongStore.getState().captureState()
+    expect(useSongStore.getState().hasUnsavedChanges()).toBe(false)
+  })
+
   it('has no unsaved changes right after loading', () => {
     useSongStore.getState().loadSong(song)
     expect(useSongStore.getState().hasUnsavedChanges()).toBe(false)
@@ -70,5 +87,60 @@ describe('useSongStore', () => {
   it('reports no unsaved changes when no song is loaded', () => {
     useSongStore.getState().setOffset(3)
     expect(useSongStore.getState().hasUnsavedChanges()).toBe(false)
+  })
+})
+
+describe('useSongStore – edge cases', () => {
+  it('falls back to the [ti:] tag, then to 未命名歌曲, when the song has no name', () => {
+    useSongStore.getState().loadSong({ ...song, name: '', lrcText: '[ti:From Tag]\n[00:01.00]x' })
+    expect(useSongStore.getState().currentSongTitle).toBe('From Tag')
+    useSongStore.getState().loadSong({ ...song, name: '', lrcText: '[00:01.00]x' })
+    expect(useSongStore.getState().currentSongTitle).toBe('未命名歌曲')
+  })
+
+  it('defaults folderId to null for songs saved before folders existed', () => {
+    const legacy = { ...song } as Partial<Song>
+    delete legacy.folderId
+    useSongStore.getState().loadSong(legacy as Song)
+    expect(useSongStore.getState().folderId).toBeNull()
+  })
+
+  it('setters update fields; lrcText and lyrics are independent until re-parsed by the caller', () => {
+    const s = useSongStore.getState()
+    s.loadSong(song)
+    s.setLrcText('[00:09.00]new')
+    expect(useSongStore.getState().lyrics.map((l) => l.text)).toEqual(['first', 'second'])
+    s.setLyrics([{ time: 9, text: 'new' }])
+    s.setAudioSource('local')
+    s.setYoutubeId(null)
+    s.setAudioFileName('x.mp3')
+    s.setFolderId(3)
+    s.setPitch(-1)
+    expect(useSongStore.getState()).toMatchObject({
+      lyrics: [{ time: 9, text: 'new' }],
+      audioSource: 'local',
+      youtubeId: null,
+      audioFileName: 'x.mp3',
+      folderId: 3,
+      pitch: -1,
+      vocalRemoval: false,
+    })
+    expect(useSongStore.getState().hasUnsavedChanges()).toBe(true)
+  })
+
+  it('clearSong wipes the song and resets playback/sync', () => {
+    useSongStore.getState().loadSong(song)
+    usePlaybackStore.getState().setCurrentTime(5)
+    useSyncStore.getState().setCurrentLineIndex(1)
+    useSongStore.getState().clearSong()
+    expect(useSongStore.getState()).toMatchObject({
+      currentSongId: null,
+      currentSongTitle: '',
+      lyrics: [],
+      lrcText: '',
+      lastSavedState: null,
+    })
+    expect(usePlaybackStore.getState().currentTime).toBe(0)
+    expect(useSyncStore.getState().currentLineIndex).toBe(-1)
   })
 })

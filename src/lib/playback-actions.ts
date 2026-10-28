@@ -65,6 +65,18 @@ export function resetPitch() {
   setPitch(0)
 }
 
+/** Toggle center-channel cancellation for the current (local) song and auto-save. */
+export function setVocalRemoval(enabled: boolean) {
+  useSongStore.getState().setVocalRemoval(enabled)
+  debouncedSaveSong()
+}
+
+export function toggleVocalRemoval() {
+  const { currentSongId, vocalRemoval } = useSongStore.getState()
+  if (!currentSongId) return
+  setVocalRemoval(!vocalRemoval)
+}
+
 export function adjustActiveFontSize(delta: number) {
   const current = useUISettingsStore.getState().activeFontSize
   const next = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, current + delta))

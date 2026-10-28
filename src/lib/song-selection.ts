@@ -4,6 +4,7 @@ import { usePlaybackStore } from '@/stores/usePlaybackStore'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { saveAudioFile } from '@/lib/audio-file-store'
 import { orderSongs, adjacentSong } from '@/lib/song-order'
+import { nextInPlaylist, pruneMissing } from '@/lib/playlist'
 import { track } from '@/lib/analytics'
 import type { Song } from '@/types'
 
@@ -50,10 +51,24 @@ export async function selectSong(song: Song): Promise<void> {
   pickLocalAudioFile(song)
 }
 
-/** Switch to the previous (-1) or next (+1) song in library order. */
+/**
+ * Switch to the previous (-1) or next (+1) song. Follows the playlist when
+ * 歌單模式 is on and the playlist has songs; otherwise library order.
+ */
 export async function navigateSong(direction: 1 | -1): Promise<Song | null> {
   const [songs, folders] = await Promise.all([db.songs.toArray(), db.folders.toArray()])
-  const target = adjacentSong(orderSongs(songs, folders), useSongStore.getState().currentSongId, direction)
+  const currentId = useSongStore.getState().currentSongId
+  const ui = useUISettingsStore.getState()
+  let target: Song | null = null
+
+  if (ui.playlistEnabled) {
+    const ids = pruneMissing(ui.playlist, songs)
+    if (ids !== ui.playlist) ui.setPlaylist(ids)
+    const nextId = nextInPlaylist(ids, currentId, direction)
+    if (nextId !== null) target = songs.find((s) => s.id === nextId) ?? null
+  }
+  if (!target) target = adjacentSong(orderSongs(songs, folders), currentId, direction)
+
   if (!target) return null
   await selectSong(target)
   return target

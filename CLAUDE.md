@@ -15,7 +15,7 @@ A real-time lyric display app with OBS sync, built for karaoke/singing workflows
 
 ## Tech Stack
 
-React 19 + TypeScript 5.9 + Vite 7 + Tailwind CSS 4 + Zustand 5 + Dexie (IndexedDB) + Radix UI + Vaul + shadcn/ui (new-york style)
+React 19 + TypeScript 5.9 + Vite 7 + Tailwind CSS 4 + Zustand 5 + Dexie (IndexedDB) + Radix UI + Vaul + shadcn/ui (new-york style) + vite-plugin-pwa (Workbox)
 
 ## Architecture
 
@@ -26,11 +26,19 @@ src/
   index.css               # Global CSS, theme tokens, shadcn overrides
   components/
     layout/               # AppLayout (sidebar resize, mobile overlay), Header, ControlPanel, SaveStatusIndicator, ShortcutsDialog
-    lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
+    lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), WordLine (Enhanced LRC word fill, rAF-driven clip-path on the active line), NowSinging, EmptyState
     playback/             # TransportBar (docked play/seek/progress/offset/volume), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
+    settings/             # DisplaySettings (collapsible), OBSPreview (embedded obs.html iframe), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl, ObsPresetsDialog (manage OBS URL presets)
+    lyrics/               # LyricsDisplay (lyrics + TransportBar), LyricsContainer (auto-scroll, 回到目前行), LyricLine (memo), NowSinging, EmptyState
+    playback/             # TransportBar (docked play/seek/progress/offset/volume; WaveformBar canvas replaces the progress bar for decoded local files), AudioPlayer (source panel in sidebar), YouTubePlayer, VolumeControl, OffsetControls, PitchControls
     settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    settings/             # DisplaySettings (collapsible), CloudBackupSettings (Gist backup, collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
     song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection
+    settings/             # DisplaySettings (collapsible), FontSizeControl, LyricsGapControl, ColorPicker, VisibleRangeControl
+    song-library/         # SongDrawer (vaul), SongDrawerMenu (export/import), SongListItem, SongSearchInput, FolderSection, PlaylistSection (歌單: reorder, 歌單模式, 自動下一首)
     song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab
+    song-modal/           # SongModal (dialog), AudioSourceTabs, LrcInputTabs, LyricsSearchTab, LrcTimingTab (打軸: Enter stamps current playback time per line)
     ui/                   # shadcn components + toaster (toast stack), dialog-host (confirm/prompt)
   hooks/
     usePlaybackEngine.ts  # Unified facade routing to youtube/local/manual player
@@ -40,7 +48,9 @@ src/
     useYouTubePlayer.ts   # YouTube IFrame API integration
     useLocalAudioPlayer.ts # HTMLAudioElement wrapper
     useManualTimer.ts     # Manual timer (performance.now()-based, polled by sync engine)
+    useAutoNext.ts        # Playlist glue: derives nextSongTitle for OBS, auto-loads/plays next playlist song on ENDED
     useSongLibrary.ts     # Dexie live query + re-exports song-service functions
+    useAutoBackup.ts      # Debounced (30s) Gist backup after any songs/folders live-query change when autoBackup is on
     useKeyboardShortcuts.ts # Global keyboard shortcuts (table lives in lib/shortcuts.ts)
     useIsMobile.ts        # matchMedia breakpoint (768px)
   stores/
@@ -54,15 +64,30 @@ src/
   lib/
     db.ts                 # Dexie instance ('lyribox-db', songs table)
     song-service.ts       # CRUD, export/import, validation for songs
+    lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization, Enhanced LRC `<mm:ss.xx>` word tags → `words` / `endTime`)
+    lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction, same-timestamp lines merged into subText for translation/romanization); exports parseTimeTags()/isMetadataLine()
+    lrc-merge.ts          # mergeTranslationLrc(): attach a separate translation/romanization LRC to the nearest primary timestamps (±0.3s) as duplicate-timestamp lines; formatTimeTag()
+    song-service.ts       # CRUD, export/import, validation for songs (getLibrarySnapshot / importLibrary shared with cloud backup)
+    gist-backup.ts        # Pure GitHub Gist API calls + mergeLibraries (newer updatedAt wins)
+    cloud-backup.ts       # backupNow / restoreFromCloud orchestration, token in localStorage['lb-gist-token'] (never in the settings store)
     lrc-parser.ts         # LRC format parser (multi-timestamp, metadata extraction)
+    lrc-timing.ts         # Line-oriented LRC model for the 打軸 editor (stamp/clear/adjust, LRC ⇄ lines)
     format.ts             # formatTime(), extractVideoId()
+    waveform.ts           # computePeaks(audioBuffer, buckets) → normalized Float32Array for the TransportBar waveform
     piesocket.ts          # Session ID, channel name, OBS URL helpers
+    obs-state.ts          # buildFullState() — FULL_STATE payload shared by PieSocket broadcast and preview
+    obs-preview-bridge.ts # In-page pub/sub mirroring outgoing SyncMessages to the embedded OBS preview
+    piesocket.ts          # Session ID, channel name, OBS URL helpers (buildObsUrl appends preset params)
+    obs-params.ts         # parseObsParams(): URL query overrides for obs.html (align/shadow/anim/before/after/size/otherSize/title/bg); obs.html keeps an inline copy
+    pwa.ts                # registerSW() (prod only); new version → toast with 「重新載入」 action, never auto-reload
     constants.ts          # DEFAULT_UI_SETTINGS, button style constants (CONTROL_BTN_*, ICON_BTN_*)
     shortcuts.ts          # Shortcut table (SHORTCUTS), formatKeys(), shortcutHint() for button titles
     analytics.ts          # track(event, data) → Umami custom events; no-op unless Umami is injected. Sends song title / youtube id, never lyrics or local file names
-    playback-actions.ts   # adjustOffset/setPitch/etc. — store update + active-line resync + debounced save
+    playback-actions.ts   # adjustOffset/setPitch/toggleVocalRemoval/etc. — store update + active-line resync + debounced save
+    vocal-removal.ts      # removeCenterChannel(): (L−R)/2 side signal for 去人聲, pure Float32Array math
     song-selection.ts     # selectSong() (handles local-file prompt), navigateSong(±1), pickLocalAudioFile()
     song-order.ts         # orderSongs() (folders A→Z then uncategorized), adjacentSong()
+    playlist.ts           # Pure playlist helpers (add/remove/move, nextInPlaylist, pruneMissing, playlistPosition)
     utils.ts              # cn() (clsx + tailwind-merge)
     __tests__/            # Unit tests for lrc-parser, format, song-service
   types/
@@ -75,6 +100,7 @@ e2e/
   app.spec.ts             # Playwright E2E tests
 public/
   obs.html                # Standalone OBS browser source (vanilla JS + PieSocket)
+  pwa-*.png, apple-touch-icon.png  # Generated by scripts/generate-pwa-icons.mjs (no image deps)
 ```
 
 ## Key Patterns
@@ -88,8 +114,13 @@ public/
 ### State Flow
 - `useSongStore` — current song data, lyrics (parsed from lrcText), offset, audio source, dirty tracking via `lastSavedState`
 - `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl
+- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen`, `obsPreviewOpen` (all persisted)
+- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted); also the playlist (`playlist` ids, `playlistEnabled`, `autoNext`, `playlistOpen`), not touched by `resetAll`
+- `usePlaybackStore` — playback status (`IDLE | PLAYING | PAUSED | ENDED`), currentTime, duration, volume, muted, audioFileObjectUrl, waveform (peaks of the decoded local file, cleared whenever the blob URL changes)
 - `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted)
 - `useSyncStore` — currentLineIndex (-1 = before first line), isSyncing flag
+- `useUISettingsStore` — font sizes, colors (active / other / passed / bg), gaps, visible range, sidebar width, `displaySettingsOpen` (all persisted)
+- `useSyncStore` — currentLineIndex (-1 = before first line), syncTime (offset-applied time, non-null only on word-timed lines), isSyncing flag
 
 ### Component Patterns
 - `memo` + `forwardRef` on performance-critical components (`LyricLine`, `NowSinging`, `ManualTimerPanel`, `SongListItem`)
@@ -105,6 +136,7 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 ### Audio Sources
 - **YouTube:** IFrame API loaded lazily (singleton pattern), managed by `useYouTubePlayer`
 - **Local files:** decoded to an `AudioBuffer` and played through a Signalsmith Stretch AudioWorklet (`lib/stretch-player.ts`, wraps the `signalsmith-stretch` WASM package) via `useLocalAudioPlayer`; pitch (升降 Key) is applied in real time, no reprocessing. The library is imported with `?url` + dynamic import so the bundler never minifies its self-stringifying worklet code.
+- **去人聲 (vocal removal):** per-song `Song.vocalRemoval` flag (local audio only, toggle in `PitchControls`). `lib/vocal-removal.ts` computes the `(L−R)/2` side signal from the decoded channels; `useLocalAudioPlayer` caches both variants and swaps the worklet buffers in place, preserving position and play state. Mono files are unaffected.
 - **Stored local files:** picked files are optionally persisted as Blobs in the `audioFiles` Dexie table (`lib/audio-file-store.ts`, keyed by songId, separate from `songs` so list queries stay light); `useLocalAudioRestore` reloads them when a song is selected. Preference lives in `useUISettingsStore.persistLocalAudio`.
 - **Manual timer:** Fallback when lyrics exist but no audio source is configured
 - All three sources share the docked `TransportBar` under the lyrics (play/pause, ±5s, progress, offset ±0.1, volume; 歸零 for manual). The sidebar `AudioPlayer` only shows the YouTube iframe / local file picker / manual hint.
@@ -112,9 +144,16 @@ No standalone worker files — all are inline Blob Workers created at runtime:
 ### OBS Sync
 - PieSocket WebSocket for real-time sync to `public/obs.html` (standalone OBS browser source)
 - Channel: `lyribox-{sessionId}` where sessionId is stored in `localStorage['lb-session-id']`
+- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change. Display settings go out as a single `SETTINGS_PATCH` carrying only the changed keys of `ObsDisplaySettings` (shallow diff via `lib/obs-settings.ts` `pickObsSettings` / `diffSettings`, debounced 50ms so slider drags coalesce). Adding an OBS-visible setting = add the key to `ObsDisplaySettings` + `OBS_SETTING_KEYS` and handle it in `obs.html` `applySettings`
+- `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect. `FULL_STATE` carries `v: SYNC_PROTOCOL_VERSION` (currently 2) and a nested `settings: ObsDisplaySettings` (also spread at top level for v1 obs pages)
+- **Protocol v1 compatibility:** the per-field types (`FONT_SIZE`, `LYRIC_COLORS`, `TITLE_FONT_SIZE`, `LYRICS_GAP`, `VISIBLE_RANGE`) are `@deprecated`; the app no longer sends them but `obs.html` still accepts them (routed through `applySettings`). Remove both the type variants and the `obs.html` cases in the next release
 - `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change
+- `useSyncBroadcast` watches all relevant store fields and broadcasts typed `SyncMessage` on change. `LYRICS_LOADED` / `FULL_STATE` carry `nextSongTitle` (read at send time); mid-song playlist edits send a separate `NEXT_SONG` so the OBS page's active line is not reset
+- `SYNC_UPDATE` carries `currentTime` (offset-applied) only while the active line has word timing (`useSyncStore.syncTime`, set per 80ms tick by `useSyncEngine`); `obs.html` animates the word fill with a rAF loop that extrapolates up to 0.3s between ticks
 - `useOBSSync` manages PieSocket connection, responds to `REQUEST_STATE`, broadcasts `FULL_STATE` on connect/reconnect
+- **URL params / presets:** `obs.html` accepts appearance overrides as query params (`lib/obs-params.ts`; params win over synced settings via a single `effective()` step). `useUISettingsStore.obsPresets` holds named param sets (seeded with 多行歌詞 / 單行字幕 from `DEFAULT_OBS_PRESETS`); the Header OBS button is a split button — main part copies the plain URL, the chevron lists presets and opens `ObsPresetsDialog`
 - **Lazy connect:** the app opens no PieSocket connection until `useUISettingsStore.obsSyncEnabled` is true, which `Header.copyOBSUrl` sets the first time the OBS URL is copied (persisted; browsers that never copy the URL never connect)
+- **Preview mode:** `obs.html?preview=1` opens no PieSocket connection; it listens for same-origin `postMessage` from its parent and posts `REQUEST_STATE` on load. `OBSPreview` embeds it in the sidebar (1920×1080 scaled to fit), forwards every message `useOBSSync.broadcast` sends via `lib/obs-preview-bridge.ts`, and answers `REQUEST_STATE` with `buildFullState()`. Works regardless of `obsSyncEnabled`
 - OBS page requests state once per (re)connect (plus bounded retries at 5s/20s if nothing arrived) — no polling while idle. piesocket-js 5.x emits no 'open' event, so reconnects are observed by overriding `channel.onOpen` (`lib/piesocket.ts` `observeReconnects`, same trick inline in `obs.html`)
 
 ### Keyboard Shortcuts
@@ -124,7 +163,7 @@ Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `
 - `↑/↓` — offset +0.1s / -0.1s (Shift: ±0.5s)
 - `Cmd/Ctrl+↑/↓` — active font size ±2 (clamped 14–60)
 - `Cmd/Ctrl+K` — open song drawer with search focused (Enter loads first match)
-- `Cmd/Ctrl+[` / `]` — previous / next song in library order
+- `Cmd/Ctrl+[` / `]` — previous / next song in library order (playlist order when 歌單模式 is on; `navigateSong` in `lib/song-selection.ts`)
 - `Cmd/Ctrl+S` — save current song
 - `?` — shortcuts dialog, `Escape` — close drawer
 - Skipped when focus is on input/textarea/select/contentEditable or inside an open dialog/drawer
@@ -132,7 +171,7 @@ Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `
 ### Dialogs & Toasts
 - Never use native `alert` / `confirm` / `prompt`. Use `confirmDialog()` / `promptDialog()` from `stores/useDialogStore` (promise-based) and `toast()` from `stores/useToastStore`.
 - Destructive actions (delete song / folder) execute immediately and show a toast with 「復原」; `deleteFolder` returns the moved song ids for `restoreFolder`.
-- Offset / pitch changes go through `lib/playback-actions.ts`, which recomputes the active line immediately (no `setCurrentLineIndex(-1)` flash) and schedules `debouncedSaveSong`; `SaveStatusIndicator` reflects `useSaveStatusStore`.
+- Offset / pitch / 去人聲 changes go through `lib/playback-actions.ts`, which recomputes the active line immediately (no `setCurrentLineIndex(-1)` flash) and schedules `debouncedSaveSong`; `SaveStatusIndicator` reflects `useSaveStatusStore`.
 
 ## Styling
 
@@ -162,22 +201,25 @@ Defined once in `lib/shortcuts.ts`; `useKeyboardShortcuts` implements them and `
 Dexie v4 (IndexedDB wrapper):
 - Database name: `lyribox-db`
 - Single table: `songs` with `id` as integer primary key
-- `Song` schema: `{ id, name, lrcText, offset, audioSource, youtubeId, audioFileName, createdAt, updatedAt }`
+- `Song` schema: `{ id, name, lrcText, offset, pitch, vocalRemoval, audioSource, youtubeId, audioFileName, folderId, createdAt, updatedAt }` (v5 upgrade backfills `vocalRemoval: false`)
 - Import validation via `isValidSong()`: checks id > 0, name 1-500 chars, valid audioSource enum, strips unknown properties
 
 ## Testing
 
 ### Unit Tests (Vitest + jsdom)
-- Located in `src/lib/__tests__/`
-- Tests: `lrc-parser.test.ts` (14 tests), `format.test.ts` (17 tests), `song-service.test.ts` (5 tests)
+- Located in `__tests__/` folders next to the code: `src/lib/__tests__/`, `src/stores/__tests__/`, `src/hooks/__tests__/`, `src/components/__tests__/`
+- `lib`: parser, format, lyrics-sync, song-service (validation with a mocked db in `song-service.test.ts`; CRUD/folders/export against fake-indexeddb in `song-service.db.test.ts`), db schema upgrades, song-order / song-selection, playback-actions, piesocket, lrclib, analytics, shortcuts, stretch-player
+- `stores`: every Zustand store (dirty tracking, persist, save status, dialogs, toasts)
+- `hooks`: sync engine (Worker stubbed), sync broadcast, OBS sync (PieSocket stubbed), keyboard shortcuts, playback engine routing, manual timer, local audio restore, isMobile
+- `components`: small presentational pieces (LyricLine, NowSinging, EmptyState, SaveStatusIndicator, ShortcutsDialog) via `@testing-library/react`
+- IndexedDB tests import `fake-indexeddb/auto` first; files that need a pristine database (schema upgrade) live in their own test file
 - Setup: `src/test/setup.ts` (imports `@testing-library/jest-dom/vitest`)
-- Run: `npm run test` (watch) or `npm run test:run` (CI)
+- Run: `npm run test` (watch), `npm run test:run` (CI), `npm run test:coverage` (v8; `vitest.config.ts` excludes entry points, types and vendored `components/ui`)
 
 ### E2E Tests (Playwright)
-- Located in `e2e/app.spec.ts`
+- Located in `e2e/app.spec.ts` (loading, theme, drawer, modal, create-and-load, Space/?/Cmd+K, undo toast) and `e2e/shortcuts.spec.ts` (Cmd+[ / ] and prev/next buttons, offset ↑/↓ + auto-save status, export download, OBS URL copy, shortcuts dialog)
 - Targets: Chromium (Desktop Chrome)
 - Base URL: `http://localhost:4173` (Vite preview server)
-- Tests: app loading, theme toggle, song drawer, song modal, create-and-load flow
 - Run: `npm run test:e2e` or `npm run test:e2e:ui`
 
 ## Environment Variables
@@ -196,6 +238,7 @@ GitHub Pages via `.github/workflows/deploy.yml`:
 2. Steps: `npm ci` → `npm run test:run` → `npm run build` (with secrets) → upload `dist/` → deploy
 3. Base path: `/lyribox/` (configured in `vite.config.ts`)
 4. Secrets required in repo settings: `VITE_PIESOCKET_API_KEY`, `VITE_PIESOCKET_CLUSTER_ID`
+5. PWA: `pwaPlugin()` in `vite.config.ts` (registerType `prompt`) precaches the build incl. `obs.html` and the `.mjs` worklet; fonts are CacheFirst, Google Fonts CSS / unpkg are StaleWhileRevalidate, YouTube / PieSocket / lrclib go straight to network
 
 ## Path Aliases
 
