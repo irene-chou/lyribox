@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, ChevronDown, Settings2 } from 'lucide-react'
+import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, ChevronDown, Settings2, Heart } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,8 @@ import { shortcutHint } from '@/lib/shortcuts'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { track } from '@/lib/analytics'
 import type { ObsPreset } from '@/types'
+
+const KOFI_URL = 'https://ko-fi.com/zephyrinn'
 
 interface HeaderProps {
   onOpenDrawer: () => void
@@ -95,6 +97,19 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
         <button onClick={toggleTheme} className={iconBtn} style={iconBtnStyle} title="切換主題" aria-label="切換主題">
           {theme === 'dark' ? <Moon size={isMobile ? 18 : 20} /> : <Sun size={isMobile ? 18 : 20} />}
         </button>
+
+        <a
+          href={KOFI_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => track('kofi_click')}
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="在 Ko-fi 支持作者"
+          aria-label="在 Ko-fi 支持作者"
+        >
+          <Heart size={isMobile ? 18 : 20} />
+        </a>
 
         {/* OBS URL: split button — main part copies the default URL, chevron lists presets */}
         <div className="flex items-center">
