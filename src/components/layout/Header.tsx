@@ -99,31 +99,6 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
           {theme === 'dark' ? <Moon size={isMobile ? 18 : 20} /> : <Sun size={isMobile ? 18 : 20} />}
         </button>
 
-        <a
-          href={KOFI_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => track('kofi_click')}
-          className={iconBtn}
-          style={iconBtnStyle}
-          title="在 Ko-fi 支持作者"
-          aria-label="在 Ko-fi 支持作者"
-        >
-          <Coffee size={isMobile ? 18 : 20} />
-        </a>
-
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={iconBtn}
-          style={iconBtnStyle}
-          title="GitHub"
-          aria-label="GitHub"
-        >
-          <Github size={isMobile ? 18 : 20} />
-        </a>
-
         {/* OBS URL: split button — main part copies the default URL, chevron lists presets */}
         <div className="flex items-center">
           <button
@@ -186,6 +161,34 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
             <Keyboard size={20} />
           </button>
         )}
+
+        {!isMobile && <span aria-hidden className="bg-lb-border" style={{ width: '1px', height: '18px', margin: '0 4px' }} />}
+
+        {/* External links */}
+        <a
+          href={KOFI_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => track('kofi_click')}
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="在 Ko-fi 支持作者"
+          aria-label="在 Ko-fi 支持作者"
+        >
+          <Coffee size={isMobile ? 18 : 20} />
+        </a>
+
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="GitHub"
+          aria-label="GitHub"
+        >
+          <Github size={isMobile ? 18 : 20} />
+        </a>
 
         {!isMobile && <span aria-hidden className="bg-lb-border" style={{ width: '1px', height: '18px', margin: '0 4px' }} />}
 
