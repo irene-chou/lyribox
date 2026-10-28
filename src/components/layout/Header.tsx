@@ -1,12 +1,14 @@
 import { useState, useCallback } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard } from 'lucide-react'
+import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, Heart } from 'lucide-react'
 import { getOBSUrl } from '@/lib/piesocket'
 import { promptDialog } from '@/stores/useDialogStore'
 import { toast } from '@/stores/useToastStore'
 import { shortcutHint } from '@/lib/shortcuts'
 import { useUISettingsStore } from '@/stores/useUISettingsStore'
 import { track } from '@/lib/analytics'
+
+const KOFI_URL = 'https://ko-fi.com/zephyrinn'
 
 interface HeaderProps {
   onOpenDrawer: () => void
@@ -78,6 +80,19 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
         <button onClick={toggleTheme} className={iconBtn} style={iconBtnStyle} title="切換主題" aria-label="切換主題">
           {theme === 'dark' ? <Moon size={isMobile ? 18 : 20} /> : <Sun size={isMobile ? 18 : 20} />}
         </button>
+
+        <a
+          href={KOFI_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => track('kofi_click')}
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="在 Ko-fi 支持作者"
+          aria-label="在 Ko-fi 支持作者"
+        >
+          <Heart size={isMobile ? 18 : 20} />
+        </a>
 
         <button
           onClick={copyOBSUrl}
