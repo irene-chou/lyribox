@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useTheme } from 'next-themes'
-import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, ChevronDown, Settings2, Heart } from 'lucide-react'
+import { Moon, Sun, Link, Check, ListMusic, Menu, FileMusic, Plus, Keyboard, ChevronDown, Settings2, Coffee } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,16 @@ import { track } from '@/lib/analytics'
 import type { ObsPreset } from '@/types'
 
 const KOFI_URL = 'https://ko-fi.com/zephyrinn'
+const GITHUB_URL = 'https://github.com/irene-chou/lyribox'
+
+// Official GitHub mark (Octicons mark-github); lucide's Github icon is only an outline approximation.
+function GithubMark({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  )
+}
 
 interface HeaderProps {
   onOpenDrawer: () => void
@@ -97,19 +107,6 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
         <button onClick={toggleTheme} className={iconBtn} style={iconBtnStyle} title="切換主題" aria-label="切換主題">
           {theme === 'dark' ? <Moon size={isMobile ? 18 : 20} /> : <Sun size={isMobile ? 18 : 20} />}
         </button>
-
-        <a
-          href={KOFI_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => track('kofi_click')}
-          className={iconBtn}
-          style={iconBtnStyle}
-          title="在 Ko-fi 支持作者"
-          aria-label="在 Ko-fi 支持作者"
-        >
-          <Heart size={isMobile ? 18 : 20} />
-        </a>
 
         {/* OBS URL: split button — main part copies the default URL, chevron lists presets */}
         <div className="flex items-center">
@@ -228,6 +225,34 @@ export function Header({ onOpenDrawer, onNewSong, onShowShortcuts, isMobile, onT
             </kbd>
           </button>
         )}
+
+        {!isMobile && <span aria-hidden className="bg-lb-border" style={{ width: '1px', height: '18px', margin: '0 4px' }} />}
+
+        {/* External links */}
+        <a
+          href={KOFI_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => track('kofi_click')}
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="在 Ko-fi 支持作者"
+          aria-label="在 Ko-fi 支持作者"
+        >
+          <Coffee size={isMobile ? 18 : 20} />
+        </a>
+
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={iconBtn}
+          style={iconBtnStyle}
+          title="GitHub"
+          aria-label="GitHub"
+        >
+          <GithubMark size={isMobile ? 18 : 20} />
+        </a>
       </div>
     </header>
   )
