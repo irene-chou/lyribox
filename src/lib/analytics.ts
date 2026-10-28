@@ -7,7 +7,7 @@
  * purpose to see what people sing); never lyrics text or local file names.
  */
 
-export type AnalyticsEvent = 'song_create' | 'song_edit' | 'song_load' | 'obs_url_copy' | 'shortcuts_open'
+export type AnalyticsEvent = 'song_create' | 'song_edit' | 'song_load' | 'obs_url_copy' | 'shortcuts_open' | 'kofi_click'
 
 /** The Umami website is shared with other projects, so every event name is prefixed. */
 const EVENT_PREFIX = 'lyribox_'
